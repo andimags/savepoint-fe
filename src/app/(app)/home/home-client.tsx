@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Gamepad2 } from "lucide-react";
-import { BookMarked, ListPlus } from "lucide-react";
+import { BookMarked, Library, ListPlus } from "lucide-react";
 import {
     getActivityFeed,
     getPlayingFeed,
@@ -39,6 +39,7 @@ function formatActivityTime(iso: string): string {
 function activityKey(item: ActivityItem): string {
     if (item.type === "review") return `r-${item.review.id}`;
     if (item.type === "diary") return `d-${item.diary.id}`;
+    if (item.type === "library") return `g-${item.library.id}`;
     return `l-${item.list.id}`;
 }
 
@@ -129,6 +130,62 @@ function ListActivityCard({
                 )}
             </div>
             <ListPlus className="size-4 shrink-0 text-primary" />
+        </div>
+    );
+}
+
+function LibraryActivityCard({
+    item,
+}: {
+    item: Extract<ActivityItem, { type: "library" }>;
+}) {
+    const { library } = item;
+    const addedAt = formatActivityTime(item.createdAt);
+    return (
+        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
+            <Avatar className="size-8">
+                <AvatarFallback className="bg-primary/15 text-xs text-primary">
+                    {library.author.username.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+            </Avatar>
+            {library.game.coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={
+                        thumbnailUrl(library.game.coverUrl) ??
+                        library.game.coverUrl
+                    }
+                    alt=""
+                    className="h-9 w-14 shrink-0 rounded object-cover"
+                />
+            ) : (
+                <div className="flex h-9 w-14 shrink-0 items-center justify-center rounded bg-muted">
+                    <Gamepad2 className="size-4 text-muted-foreground" />
+                </div>
+            )}
+            <div className="min-w-0 flex-1 text-sm">
+                <Link
+                    href={`/users/${library.author.id}`}
+                    className="font-medium hover:underline"
+                >
+                    {library.author.username}
+                </Link>{" "}
+                <span className="text-muted-foreground">
+                    added to their library
+                </span>{" "}
+                <Link
+                    href={`/games/${library.game.id}`}
+                    className="font-medium hover:underline"
+                >
+                    {library.game.name}
+                </Link>
+                {addedAt && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                        {addedAt}
+                    </p>
+                )}
+            </div>
+            <Library className="size-4 shrink-0 text-primary" />
         </div>
     );
 }
@@ -277,8 +334,8 @@ export function HomeClient() {
                     </div>
                 ) : activity.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                        No activity yet. Follow people to see their reviews,
-                        logs, and lists here.
+                        No activity yet. Add a game, log an entry, or follow
+                        people to fill your feed.
                     </p>
                 ) : (
                     <div className="space-y-4">
@@ -296,6 +353,14 @@ export function HomeClient() {
                                 return (
                                     <DiaryActivityCard
                                         key={`d-${item.diary.id}`}
+                                        item={item}
+                                    />
+                                );
+                            }
+                            if (item.type === "library") {
+                                return (
+                                    <LibraryActivityCard
+                                        key={`g-${item.library.id}`}
                                         item={item}
                                     />
                                 );

@@ -256,10 +256,19 @@ export interface ListActivity {
     author: { id: string; username: string };
 }
 
+export interface LibraryActivity {
+    id: string;
+    status: GameStatus;
+    platform: Platform;
+    game: GameRef;
+    author: { id: string; username: string };
+}
+
 export type ActivityItem =
     | { type: "review"; createdAt: string; review: ReviewView }
     | { type: "diary"; createdAt: string; diary: DiaryActivity }
-    | { type: "list"; createdAt: string; list: ListActivity };
+    | { type: "list"; createdAt: string; list: ListActivity }
+    | { type: "library"; createdAt: string; library: LibraryActivity };
 
 export interface ActivityFeed {
     items: ActivityItem[];
