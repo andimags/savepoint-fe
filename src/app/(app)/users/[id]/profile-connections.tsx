@@ -17,8 +17,8 @@ export function ProfileConnections({
 }: {
     connections: ProfileConnection[];
 }) {
-    // Only surface a badge when the user has named the platform on their
-    // edit-profile page. An unset name means the badge stays hidden, even if the
+    // Only surface a connection when the user has named the platform on their
+    // edit-profile page. An unset name means it stays hidden, even if the
     // account is synced.
     const namedConnections = connections.filter(
         (connection) => connection.username?.trim(),
@@ -26,9 +26,9 @@ export function ProfileConnections({
     if (namedConnections.length === 0) return null;
 
     return (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
             {namedConnections.map((connection) => (
-                <ConnectionPill
+                <ConnectionItem
                     key={connection.platform}
                     connection={connection}
                 />
@@ -37,7 +37,7 @@ export function ProfileConnections({
     );
 }
 
-function ConnectionPill({ connection }: { connection: ProfileConnection }) {
+function ConnectionItem({ connection }: { connection: ProfileConnection }) {
     const brand = PLATFORM_BRANDS.find(
         (b) => b.key === BRAND_KEY_BY_PLATFORM[connection.platform],
     );
@@ -49,17 +49,22 @@ function ConnectionPill({ connection }: { connection: ProfileConnection }) {
             ? steamProfileUrl(connection.steamId64)
             : null;
 
-    const className =
-        "inline-flex max-w-[12rem] items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium";
     const content = (
         <>
             <span
-                className="flex size-5 shrink-0 items-center justify-center rounded-md text-white [&>svg]:size-3"
+                className="flex size-8 shrink-0 items-center justify-center rounded-xl text-white shadow-sm [&>svg]:size-4"
                 style={{ backgroundImage: brand.gradient }}
             >
                 {brand.glyph}
             </span>
-            <span className="truncate">{label}</span>
+            <span className="flex min-w-0 flex-col leading-tight">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {brand.name}
+                </span>
+                <span className="truncate text-sm font-medium group-hover:text-primary">
+                    {label}
+                </span>
+            </span>
         </>
     );
 
@@ -70,7 +75,7 @@ function ConnectionPill({ connection }: { connection: ProfileConnection }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 title={`${brand.name} · ${label}`}
-                className={`${className} transition-colors hover:border-primary/50`}
+                className="group inline-flex max-w-[14rem] items-center gap-2.5 transition-colors"
             >
                 {content}
             </a>
@@ -78,7 +83,10 @@ function ConnectionPill({ connection }: { connection: ProfileConnection }) {
     }
 
     return (
-        <span className={className} title={`${brand.name} · ${label}`}>
+        <span
+            className="group inline-flex max-w-[14rem] items-center gap-2.5"
+            title={`${brand.name} · ${label}`}
+        >
             {content}
         </span>
     );
