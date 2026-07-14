@@ -277,8 +277,8 @@ export function HomeClient() {
                     </div>
                 ) : activity.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                        No activity yet. Log a game or write a review to get
-                        things started.
+                        No activity yet. Follow people to see their reviews,
+                        logs, and lists here.
                     </p>
                 ) : (
                     <div className="space-y-4">

@@ -24,6 +24,7 @@ import {
     thumbnailUrl,
 } from "@/lib/api-client";
 import { AddToList } from "@/components/add-to-list";
+import { formatPlaytime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -66,12 +67,6 @@ const PLATFORM_OPTIONS: { value: Platform; label: string }[] =
         value: p,
         label: PLATFORM_LABELS[p],
     }));
-
-function formatPlaytime(minutes: number): string {
-    if (minutes === 0) return "—";
-    const hours = minutes / 60;
-    return hours < 1 ? `${minutes} min` : `${hours.toFixed(1)} hrs`;
-}
 
 export function LibraryClient() {
     const { data: session } = useSession();
@@ -291,7 +286,7 @@ export function LibraryClient() {
             </div>
 
             {!data ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3">
                     {Array.from({ length: 6 }).map((_, i) => (
                         <Skeleton key={i} className="h-20 w-full" />
                     ))}
@@ -303,7 +298,7 @@ export function LibraryClient() {
                 </p>
             ) : (
                 <>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3">
                         {data.items.map((userGame) => (
                             <div
                                 key={userGame.id}
@@ -368,7 +363,7 @@ export function LibraryClient() {
                                     </SelectContent>
                                 </Select>
                                 <Select
-                                    value={userGame.status ?? ""}
+                                    value={userGame.status}
                                     onValueChange={(value) =>
                                         handleStatusChange(userGame, value)
                                     }

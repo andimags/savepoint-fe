@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -34,6 +35,10 @@ export function ProfileSettingsClient() {
     const [username, setUsername] = useState("");
     const [savingProfile, setSavingProfile] = useState(false);
 
+    const [steamUsername, setSteamUsername] = useState("");
+    const [psnUsername, setPsnUsername] = useState("");
+    const [savingLinkedAccounts, setSavingLinkedAccounts] = useState(false);
+
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [savingPassword, setSavingPassword] = useState(false);
@@ -48,6 +53,8 @@ export function ProfileSettingsClient() {
                 setMe(data);
                 setDisplayName(data.displayName ?? "");
                 setUsername(data.username);
+                setSteamUsername(data.steamUsername ?? "");
+                setPsnUsername(data.psnUsername ?? "");
             })
             .catch(() => toast.error("Failed to load profile."));
     }, [token]);
@@ -74,6 +81,32 @@ export function ProfileSettingsClient() {
             );
         } finally {
             setSavingProfile(false);
+        }
+    }
+
+    async function handleSaveLinkedAccounts(
+        event: React.FormEvent<HTMLFormElement>,
+    ) {
+        event.preventDefault();
+        if (!token) return;
+        setSavingLinkedAccounts(true);
+        try {
+            const updated = await updateProfile(token, {
+                steamUsername,
+                psnUsername,
+            });
+            setMe(updated);
+            setSteamUsername(updated.steamUsername ?? "");
+            setPsnUsername(updated.psnUsername ?? "");
+            toast.success("Linked account names updated.");
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to update linked accounts.",
+            );
+        } finally {
+            setSavingLinkedAccounts(false);
         }
     }
 
@@ -214,6 +247,60 @@ export function ProfileSettingsClient() {
                         </div>
                         <Button type="submit" disabled={savingProfile}>
                             {savingProfile ? "Saving..." : "Save changes"}
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Linked accounts</CardTitle>
+                    <CardDescription>
+                        Choose how your Steam and PlayStation usernames appear on
+                        your profile. When set, they appear next to accounts
+                        you&apos;ve synced on the{" "}
+                        <Link
+                            href="/settings/connections"
+                            className="font-medium underline underline-offset-2"
+                        >
+                            Connections
+                        </Link>{" "}
+                        page.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form
+                        onSubmit={handleSaveLinkedAccounts}
+                        className="space-y-4"
+                    >
+                        <div className="space-y-2">
+                            <Label htmlFor="steamUsername">
+                                Steam username
+                            </Label>
+                            <Input
+                                id="steamUsername"
+                                value={steamUsername}
+                                onChange={(e) =>
+                                    setSteamUsername(e.target.value)
+                                }
+                                placeholder="How your Steam account appears"
+                                maxLength={40}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="psnUsername">
+                                PlayStation username
+                            </Label>
+                            <Input
+                                id="psnUsername"
+                                value={psnUsername}
+                                onChange={(e) => setPsnUsername(e.target.value)}
+                                placeholder="How your PlayStation account appears"
+                                maxLength={40}
+                            />
+                        </div>
+                        <Button type="submit" disabled={savingLinkedAccounts}>
+                            {savingLinkedAccounts ? "Saving..." : "Save changes"}
                         </Button>
                     </form>
                 </CardContent>

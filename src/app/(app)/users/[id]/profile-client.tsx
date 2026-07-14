@@ -26,6 +26,8 @@ import {
     type UserGame,
 } from "@/lib/api-client";
 import { ReviewCard } from "@/components/review-card";
+import { ProfileConnections } from "./profile-connections";
+import { formatPlaytime } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +52,7 @@ export function ProfileClient({ userId }: { userId: string }) {
     const [followers, setFollowers] = useState<SimpleUser[] | null>(null);
     const [following, setFollowing] = useState<SimpleUser[] | null>(null);
     const [busy, setBusy] = useState(false);
+    const [activeTab, setActiveTab] = useState("games");
 
     const refresh = useCallback(async () => {
         if (!token) return;
@@ -103,11 +106,11 @@ export function ProfileClient({ userId }: { userId: string }) {
     return (
         <div className="space-y-8">
             <div className="flex items-center gap-4">
-                <Avatar className="size-16">
+                <Avatar className="size-28">
                     {profile.avatarUrl && (
                         <AvatarImage src={profile.avatarUrl} alt="" />
                     )}
-                    <AvatarFallback className="bg-primary/15 text-xl text-primary">
+                    <AvatarFallback className="bg-primary/15 text-3xl text-primary">
                         {title.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                 </Avatar>
@@ -121,9 +124,24 @@ export function ProfileClient({ userId }: { userId: string }) {
                         </p>
                     )}
                     <p className="text-sm text-muted-foreground">
-                        {profile.gameCount} games · {profile.followerCount}{" "}
-                        followers · {profile.followingCount} following
+                        {profile.gameCount} games ·{" "}
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("followers")}
+                            className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-1 focus-visible:outline-ring"
+                        >
+                            {profile.followerCount} followers
+                        </button>{" "}
+                        ·{" "}
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("following")}
+                            className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-1 focus-visible:outline-ring"
+                        >
+                            {profile.followingCount} following
+                        </button>
                     </p>
+                    <ProfileConnections connections={profile.connections} />
                 </div>
                 {profile.isSelf ? (
                     <Button asChild variant="outline">
@@ -142,11 +160,14 @@ export function ProfileClient({ userId }: { userId: string }) {
                 )}
             </div>
 
-            {/* Spotlight: favorite game, genres, franchise, favorite games */}
+            {/* Spotlight: favorite game, genres, franchise, favorite games.
+                Shown only when the user has curated favorites, so auto-derived
+                fallbacks never surface a section the user never set up. */}
             {stats &&
+                stats.hasFavorites &&
                 (stats.favoriteGame ||
                     stats.favoriteGenres.length > 0 ||
-                    stats.favoriteGames.length > 0 ||
+                    (stats.curated && stats.favoriteGames.length > 0) ||
                     stats.favoriteFranchise) && (
                     <div className="grid gap-4 md:grid-cols-3">
                         {stats.favoriteGame && (
@@ -185,89 +206,97 @@ export function ProfileClient({ userId }: { userId: string }) {
                             </Card>
                         )}
 
-                        <Card
-                            className={
-                                stats.favoriteGame
-                                    ? "md:col-span-2"
-                                    : "md:col-span-3"
-                            }
-                        >
-                            <CardContent className="space-y-4 pt-4">
-                                {stats.favoriteFranchise && (
-                                    <div>
-                                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                            Favorite franchise
-                                        </p>
-                                        <Badge className="border-transparent bg-brand/15 text-brand">
-                                            {stats.favoriteFranchise}
-                                        </Badge>
-                                    </div>
-                                )}
-                                {stats.favoriteGenres.length > 0 && (
-                                    <div>
-                                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                            Favorite genres
-                                        </p>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {stats.favoriteGenres.map(
-                                                (genre) => (
-                                                    <Badge
-                                                        key={genre}
-                                                        className="border-transparent bg-primary/15 text-primary"
-                                                    >
-                                                        {genre}
-                                                    </Badge>
-                                                ),
-                                            )}
+                        {(stats.favoriteFranchise ||
+                            stats.favoriteGenres.length > 0 ||
+                            (stats.curated && stats.favoriteGames.length > 0)) && (
+                            <Card
+                                className={
+                                    stats.favoriteGame
+                                        ? "md:col-span-2"
+                                        : "md:col-span-3"
+                                }
+                            >
+                                <CardContent className="space-y-4 pt-4">
+                                    {stats.favoriteFranchise && (
+                                        <div>
+                                            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                                Favorite franchise
+                                            </p>
+                                            <Badge className="border-transparent bg-brand/15 text-brand">
+                                                {stats.favoriteFranchise}
+                                            </Badge>
                                         </div>
-                                    </div>
-                                )}
-                                {stats.favoriteGames.length > 0 && (
-                                    <div>
-                                        <p className="mb-2 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                            <Star className="size-3.5" />{" "}
-                                            Favorite games
-                                        </p>
-                                        <div className="grid grid-cols-5 gap-2">
-                                            {stats.favoriteGames.map((g) => (
-                                                <Link
-                                                    key={g.id}
-                                                    href={`/games/${g.id}`}
-                                                    className="group space-y-1"
-                                                >
-                                                    <div className="aspect-[16/9] overflow-hidden rounded-md bg-muted">
-                                                        {g.coverUrl && (
-                                                            // eslint-disable-next-line @next/next/no-img-element
-                                                            <img
-                                                                src={
-                                                                    thumbnailUrl(
-                                                                        g.coverUrl,
-                                                                    ) ??
-                                                                    g.coverUrl
-                                                                }
-                                                                alt={g.name}
-                                                                loading="lazy"
-                                                                className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                    <p
-                                                        className="truncate text-xs font-medium"
-                                                        title={g.name}
-                                                    >
-                                                        {g.name}
-                                                    </p>
-                                                </Link>
-                                            ))}
+                                    )}
+                                    {stats.favoriteGenres.length > 0 && (
+                                        <div>
+                                            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                                Favorite genres
+                                            </p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {stats.favoriteGenres.map(
+                                                    (genre) => (
+                                                        <Badge
+                                                            key={genre}
+                                                            className="border-transparent bg-primary/15 text-primary"
+                                                        >
+                                                            {genre}
+                                                        </Badge>
+                                                    ),
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                    )}
+                                    {(stats.curated && stats.favoriteGames.length > 0) && (
+                                        <div>
+                                            <p className="mb-2 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                                <Star className="size-3.5" />{" "}
+                                                Favorite games
+                                            </p>
+                                            <div className="grid grid-cols-5 gap-2">
+                                                {stats.favoriteGames.map(
+                                                    (g) => (
+                                                        <Link
+                                                            key={g.id}
+                                                            href={`/games/${g.id}`}
+                                                            className="group space-y-1"
+                                                        >
+                                                            <div className="aspect-[16/9] overflow-hidden rounded-md bg-muted">
+                                                                {g.coverUrl && (
+                                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                                    <img
+                                                                        src={
+                                                                            thumbnailUrl(
+                                                                                g.coverUrl,
+                                                                            ) ??
+                                                                            g.coverUrl
+                                                                        }
+                                                                        alt={
+                                                                            g.name
+                                                                        }
+                                                                        loading="lazy"
+                                                                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                            <p
+                                                                className="truncate text-xs font-medium"
+                                                                title={g.name}
+                                                            >
+                                                                {g.name}
+                                                            </p>
+                                                        </Link>
+                                                    ),
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                 )}
 
-            <Tabs defaultValue="games">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList>
                     <TabsTrigger value="games">
                         Games ({profile.gameCount})
@@ -293,14 +322,16 @@ export function ProfileClient({ userId }: { userId: string }) {
                             No games in library yet.
                         </p>
                     ) : (
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-3">
                             {games.items.map((ug) => (
-                                <Link
+                                <div
                                     key={ug.id}
-                                    href={`/games/${ug.gameId}`}
-                                    className="group overflow-hidden rounded-lg border bg-card"
+                                    className="flex items-center gap-3 rounded-lg border bg-card p-3"
                                 >
-                                    <div className="aspect-[16/9] w-full overflow-hidden bg-muted">
+                                    <Link
+                                        href={`/games/${ug.gameId}`}
+                                        className="shrink-0"
+                                    >
                                         {ug.game.coverUrl ? (
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <img
@@ -311,28 +342,34 @@ export function ProfileClient({ userId }: { userId: string }) {
                                                 }
                                                 alt=""
                                                 loading="lazy"
-                                                className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                className="h-14 w-24 rounded-md object-cover"
                                             />
                                         ) : (
-                                            <div className="flex size-full items-center justify-center text-muted-foreground">
-                                                <Gamepad2 className="size-7" />
+                                            <div className="flex h-14 w-24 items-center justify-center rounded-md bg-muted">
+                                                <Gamepad2 className="size-5 text-muted-foreground" />
                                             </div>
                                         )}
-                                    </div>
-                                    <div className="space-y-1 p-2.5">
-                                        <p className="truncate text-sm font-medium">
+                                    </Link>
+                                    <div className="min-w-0 flex-1">
+                                        <Link
+                                            href={`/games/${ug.gameId}`}
+                                            className="block truncate text-sm font-medium hover:underline"
+                                        >
                                             {ug.game.name}
+                                        </Link>
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatPlaytime(ug.playtimeMinutes)}
                                         </p>
-                                        {ug.status && (
-                                            <Badge
-                                                variant="secondary"
-                                                className="text-xs"
-                                            >
-                                                {STATUS_LABELS[ug.status]}
-                                            </Badge>
-                                        )}
                                     </div>
-                                </Link>
+                                    {ug.status && (
+                                        <Badge
+                                            variant="secondary"
+                                            className="shrink-0 text-xs"
+                                        >
+                                            {STATUS_LABELS[ug.status]}
+                                        </Badge>
+                                    )}
+                                </div>
                             ))}
                         </div>
                     )}

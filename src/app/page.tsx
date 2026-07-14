@@ -80,10 +80,8 @@ export default async function Home() {
                 </h1>
 
                 <p className="max-w-xl text-balance text-lg text-muted-foreground">
-                    SavePoint is where players rate, review, and remember every
-                    game they touch. Import your library, build your backlog,
-                    flex your stats, and never lose track of a save point again.
-                    🎮
+                    Rate, review, and remember every game you play. Import your
+                    library, track your backlog, and share your stats. 🎮
                 </p>
 
                 <div className="flex flex-wrap items-center justify-center gap-3">
@@ -107,15 +105,16 @@ export default async function Home() {
                             <div
                                 key={brand.key}
                                 title={brand.name}
-                                className="flex size-11 items-center justify-center rounded-xl text-white shadow-sm"
-                                style={{ backgroundColor: brand.color }}
+                                className="flex size-12 items-center justify-center rounded-2xl text-white shadow-md ring-1 ring-white/10 transition-transform hover:-translate-y-0.5 hover:scale-105"
+                                style={{ backgroundImage: brand.gradient }}
                             >
                                 {brand.glyph}
                             </div>
                         ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Steam available now — more platforms coming soon.
+                        Steam and PlayStation available now — more platforms
+                        coming soon.
                     </p>
                 </div>
 

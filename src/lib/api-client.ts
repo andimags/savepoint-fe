@@ -23,10 +23,19 @@ export function thumbnailUrl(url: string | null): string | null {
     return `${prefix}crop/600/400/${assetPath}`;
 }
 
+export type SyncState = "pending" | "syncing" | "done" | "failed";
+
 export interface SteamStatus {
     connected: boolean;
     steamId64?: string;
-    syncStatus?: "pending" | "syncing" | "done" | "failed";
+    syncStatus?: SyncState;
+    syncError?: string | null;
+}
+
+export interface PsnStatus {
+    connected: boolean;
+    onlineId?: string | null;
+    syncStatus?: SyncState;
     syncError?: string | null;
 }
 
@@ -98,7 +107,7 @@ export interface UserGame {
     game: Game;
     platform: Platform;
     playtimeMinutes: number;
-    status: GameStatus | null;
+    status: GameStatus;
 }
 
 export interface Paginated<T> {
@@ -168,6 +177,15 @@ export interface UserSearchResult {
     isFollowing: boolean;
 }
 
+export interface ProfileConnection {
+    platform: "STEAM" | "PSN";
+    // The user's edit-profile display name for this platform. Null when unset,
+    // in which case the client hides the badge entirely.
+    username: string | null;
+    // Present for Steam only — used to link to the public Steam community profile.
+    steamId64: string | null;
+}
+
 export interface Profile {
     id: string;
     username: string;
@@ -179,6 +197,7 @@ export interface Profile {
     gameCount: number;
     isFollowing: boolean;
     isSelf: boolean;
+    connections: ProfileConnection[];
 }
 
 export interface Me {
@@ -191,6 +210,8 @@ export interface Me {
     topGameIds: string[];
     favoriteGenres: string[];
     topFranchise: string | null;
+    steamUsername: string | null;
+    psnUsername: string | null;
     createdAt: string;
 }
 
@@ -201,6 +222,7 @@ export interface GameRef {
 }
 
 export interface ProfileStats {
+    hasFavorites: boolean;
     favoriteGame: GameRef | null;
     favoriteGames: GameRef[];
     favoriteGenres: string[];
@@ -344,6 +366,19 @@ export const connectSteam = (token: string, profileUrlOrId: string) =>
 export const resyncSteam = (token: string) =>
     apiFetch(token, "/platform-connections/steam/resync", { method: "POST" });
 
+// --- PlayStation Network connection ---
+export const getPsnStatus = (token: string) =>
+    apiFetch<PsnStatus>(token, "/platform-connections/psn/status");
+export const connectPsn = (token: string, npsso: string) =>
+    apiFetch<PsnStatus>(token, "/platform-connections/psn", {
+        method: "POST",
+        body: JSON.stringify({ npsso }),
+    });
+export const resyncPsn = (token: string) =>
+    apiFetch<PsnStatus>(token, "/platform-connections/psn/resync", {
+        method: "POST",
+    });
+
 // --- Games ---
 export const searchGames = (token: string, q: string) =>
     apiFetch<Game[]>(token, `/games/search?q=${encodeURIComponent(q)}`);
@@ -380,7 +415,7 @@ export const addUserGame = (
 export const setUserGameStatus = (
     token: string,
     id: string,
-    status: GameStatus | null,
+    status: GameStatus,
 ) =>
     apiFetch<UserGame>(token, `/user-games/${id}`, {
         method: "PATCH",
@@ -543,6 +578,8 @@ export const updateProfile = (
         topGameIds?: string[];
         favoriteGenres?: string[];
         topFranchise?: string | null;
+        steamUsername?: string | null;
+        psnUsername?: string | null;
     },
 ) =>
     apiFetch<Me>(token, "/users/me", {
