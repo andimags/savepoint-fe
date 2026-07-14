@@ -18,6 +18,7 @@ import {
     unfollowUser,
     thumbnailUrl,
     STATUS_LABELS,
+    type GameStatus,
     type ListSummary,
     type Paginated,
     type Profile,
@@ -40,6 +41,14 @@ interface SimpleUser {
     username: string;
 }
 
+const STATUS_FILTERS: { value: string; label: string }[] = [
+    { value: "ALL", label: "All" },
+    { value: "PLAYING", label: "Playing" },
+    { value: "FINISHED", label: "Finished" },
+    { value: "BACKLOG", label: "Backlog" },
+    { value: "DROPPED", label: "Dropped" },
+];
+
 export function ProfileClient({ userId }: { userId: string }) {
     const { data: session } = useSession();
     const token = session?.accessToken;
@@ -53,14 +62,14 @@ export function ProfileClient({ userId }: { userId: string }) {
     const [following, setFollowing] = useState<SimpleUser[] | null>(null);
     const [busy, setBusy] = useState(false);
     const [activeTab, setActiveTab] = useState("games");
+    const [gameStatus, setGameStatus] = useState("ALL");
 
     const refresh = useCallback(async () => {
         if (!token) return;
-        const [p, st, r, g, ls, fr, fl] = await Promise.all([
+        const [p, st, r, ls, fr, fl] = await Promise.all([
             getProfile(token, userId),
             getProfileStats(token, userId),
             getUserReviews(token, userId),
-            getUserGames(token, 1, 24, undefined, undefined, userId),
             getUserLists(token, userId),
             getFollowers(token, userId),
             getFollowing(token, userId),
@@ -68,15 +77,26 @@ export function ProfileClient({ userId }: { userId: string }) {
         setProfile(p);
         setStats(st);
         setReviews(r);
-        setGames(g);
         setLists(ls);
         setFollowers(fr);
         setFollowing(fl);
     }, [token, userId]);
 
+    const loadGames = useCallback(async () => {
+        if (!token) return;
+        const status =
+            gameStatus === "ALL" ? undefined : (gameStatus as GameStatus);
+        setGames(await getUserGames(token, 1, 24, status, undefined, userId));
+    }, [token, userId, gameStatus]);
+
     useEffect(() => {
         refresh().catch(() => toast.error("Failed to load profile."));
     }, [refresh]);
+
+    useEffect(() => {
+        setGames(null);
+        loadGames().catch(() => toast.error("Failed to load games."));
+    }, [loadGames]);
 
     if (!profile) return <Skeleton className="h-64 w-full" />;
 
@@ -316,10 +336,31 @@ export function ProfileClient({ userId }: { userId: string }) {
                     </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="games" className="pt-4">
-                    {!games || games.items.length === 0 ? (
+                <TabsContent value="games" className="space-y-4 pt-4">
+                    <Tabs value={gameStatus} onValueChange={setGameStatus}>
+                        <TabsList>
+                            {STATUS_FILTERS.map((filter) => (
+                                <TabsTrigger
+                                    key={filter.value}
+                                    value={filter.value}
+                                >
+                                    {filter.label}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </Tabs>
+
+                    {!games ? (
+                        <div className="grid grid-cols-1 gap-3">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <Skeleton key={i} className="h-20 w-full" />
+                            ))}
+                        </div>
+                    ) : games.items.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                            No games in library yet.
+                            {gameStatus === "ALL"
+                                ? "No games in library yet."
+                                : "No games with this status."}
                         </p>
                     ) : (
                         <div className="grid grid-cols-1 gap-3">
