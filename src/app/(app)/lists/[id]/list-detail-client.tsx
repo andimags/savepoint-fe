@@ -1,19 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Gamepad2, Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Trash2, X } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
 import {
-    deleteList,
-    getList,
-    removeListItem,
-    thumbnailUrl,
-    updateList,
-    type ListDetail,
-} from "@/lib/api-client";
+    useDeleteList,
+    useList,
+    useRemoveListItem,
+    useUpdateList,
+} from "@/hooks/use-lists";
+import { useCurrentUserId } from "@/hooks/use-token";
+import { GameCover } from "@/components/game-cover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,24 +29,16 @@ import {
 
 export function ListDetailClient({ listId }: { listId: string }) {
     const router = useRouter();
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-    const myUserId = session?.user?.id;
+    const myUserId = useCurrentUserId();
 
-    const [list, setList] = useState<ListDetail | null>(null);
+    const { data: list } = useList(listId);
+    const updateList = useUpdateList(listId);
+    const deleteList = useDeleteList();
+    const removeItem = useRemoveListItem(listId);
+
     const [editOpen, setEditOpen] = useState(false);
     const [editTitle, setEditTitle] = useState("");
     const [editDescription, setEditDescription] = useState("");
-    const [savingEdit, setSavingEdit] = useState(false);
-
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        setList(await getList(token, listId));
-    }, [token, listId]);
-
-    useEffect(() => {
-        refresh().catch(() => toast.error("Failed to load list."));
-    }, [refresh]);
 
     if (!list) return <Skeleton className="h-64 w-full" />;
 
@@ -59,42 +51,38 @@ export function ListDetailClient({ listId }: { listId: string }) {
         setEditOpen(true);
     }
 
-    async function handleSaveEdit(event: React.FormEvent<HTMLFormElement>) {
+    function handleSaveEdit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token || !editTitle.trim()) return;
-        setSavingEdit(true);
-        try {
-            await updateList(
-                token,
-                listId,
-                editTitle.trim(),
-                editDescription.trim() || undefined,
-            );
-            setEditOpen(false);
-            toast.success("List updated.");
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update list.",
-            );
-        } finally {
-            setSavingEdit(false);
-        }
+        if (!editTitle.trim()) return;
+        updateList.mutate(
+            {
+                title: editTitle.trim(),
+                description: editDescription.trim() || undefined,
+            },
+            {
+                onSuccess: () => {
+                    setEditOpen(false);
+                    toast.success("List updated.");
+                },
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to update list."),
+                    ),
+            },
+        );
     }
 
-    async function handleDeleteList() {
-        if (!token) return;
-        await deleteList(token, listId);
-        toast.success("List deleted.");
-        router.push("/lists");
+    function handleDeleteList() {
+        deleteList.mutate(listId, {
+            onSuccess: () => {
+                toast.success("List deleted.");
+                router.push("/lists");
+            },
+        });
     }
 
-    async function handleRemoveItem(itemId: string) {
-        if (!token) return;
-        await removeListItem(token, listId, itemId);
-        await refresh();
+    function handleRemoveItem(itemId: string) {
+        removeItem.mutate(itemId);
     }
 
     return (
@@ -112,7 +100,7 @@ export function ListDetailClient({ listId }: { listId: string }) {
                         >
                             {list.owner.username}
                         </Link>
-                        {list.description && <> — {list.description}</>}
+                        {list.description && <> · {list.description}</>}
                     </p>
                 </div>
                 {isOwner && (
@@ -161,8 +149,13 @@ export function ListDetailClient({ listId }: { listId: string }) {
                             />
                         </div>
                         <DialogFooter>
-                            <Button type="submit" disabled={savingEdit}>
-                                {savingEdit ? "Saving..." : "Save changes"}
+                            <Button
+                                type="submit"
+                                disabled={updateList.isPending}
+                            >
+                                {updateList.isPending
+                                    ? "Saving..."
+                                    : "Save changes"}
                             </Button>
                         </DialogFooter>
                     </form>
@@ -187,21 +180,11 @@ export function ListDetailClient({ listId }: { listId: string }) {
                                 href={`/games/${item.game.id}`}
                                 className="shrink-0"
                             >
-                                {item.game.coverUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={
-                                            thumbnailUrl(item.game.coverUrl) ??
-                                            item.game.coverUrl
-                                        }
-                                        alt=""
-                                        className="h-10 w-16 rounded object-cover"
-                                    />
-                                ) : (
-                                    <div className="flex h-10 w-16 items-center justify-center rounded bg-muted">
-                                        <Gamepad2 className="size-4 text-muted-foreground" />
-                                    </div>
-                                )}
+                                <GameCover
+                                    url={item.game.coverUrl}
+                                    className="h-10 w-16 rounded"
+                                    iconClassName="size-4"
+                                />
                             </Link>
                             <Link
                                 href={`/games/${item.game.id}`}

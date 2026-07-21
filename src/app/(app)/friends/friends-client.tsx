@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Search, UserPlus } from "lucide-react";
+import { type UserSearchResult } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
 import {
-    followUser,
-    getFollowers,
-    getFollowing,
-    searchUsers,
-    unfollowUser,
-    type UserSearchResult,
-} from "@/lib/api-client";
+    useFollowers,
+    useFollowing,
+    useFollowMutation,
+    useUserSearch,
+} from "@/hooks/use-social";
+import { useCurrentUserId } from "@/hooks/use-token";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -59,65 +59,31 @@ function UserRow({
 }
 
 export function FriendsClient() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-    const myId = session?.user?.id;
+    const myId = useCurrentUserId();
 
-    const [query, setQuery] = useState("");
-    const [results, setResults] = useState<UserSearchResult[] | null>(null);
-    const [following, setFollowing] = useState<SimpleUser[]>([]);
-    const [followers, setFollowers] = useState<SimpleUser[]>([]);
+    const [input, setInput] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
 
-    const loadLists = useCallback(async () => {
-        if (!token || !myId) return;
-        const [fl, fr] = await Promise.all([
-            getFollowing(token, myId),
-            getFollowers(token, myId),
-        ]);
-        setFollowing(fl);
-        setFollowers(fr);
-    }, [token, myId]);
+    const { data: results } = useUserSearch(searchTerm);
+    const { data: following = [] } = useFollowing(myId ?? "");
+    const { data: followers = [] } = useFollowers(myId ?? "");
+    const toggleFollow = useFollowMutation();
 
-    useEffect(() => {
-        loadLists().catch(() => {});
-    }, [loadLists]);
-
-    async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
+    function handleSearch(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token || !query.trim()) return;
-        try {
-            setResults(await searchUsers(token, query.trim()));
-        } catch (error) {
-            toast.error(
-                error instanceof Error ? error.message : "Search failed",
-            );
-        }
+        setSearchTerm(input.trim());
     }
 
-    async function toggleFollow(user: UserSearchResult) {
-        if (!token) return;
-        try {
-            if (user.isFollowing) {
-                await unfollowUser(token, user.id);
-            } else {
-                await followUser(token, user.id);
-            }
-            setResults(
-                (prev) =>
-                    prev?.map((u) =>
-                        u.id === user.id
-                            ? { ...u, isFollowing: !u.isFollowing }
-                            : u,
-                    ) ?? null,
-            );
-            await loadLists();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update follow",
-            );
-        }
+    function handleToggleFollow(user: UserSearchResult) {
+        toggleFollow.mutate(
+            { userId: user.id, isFollowing: user.isFollowing },
+            {
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to update follow"),
+                    ),
+            },
+        );
     }
 
     return (
@@ -127,15 +93,15 @@ export function FriendsClient() {
                     <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         placeholder="Search players by username..."
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
                         className="pl-8"
                     />
                 </div>
                 <Button type="submit">Search</Button>
             </form>
 
-            {results !== null && (
+            {searchTerm !== "" && results && (
                 <div className="space-y-2">
                     <h2 className="text-sm font-medium text-muted-foreground">
                         {results.length} result{results.length === 1 ? "" : "s"}
@@ -150,7 +116,7 @@ export function FriendsClient() {
                                 key={user.id}
                                 user={user}
                                 following={user.isFollowing}
-                                onToggle={() => toggleFollow(user)}
+                                onToggle={() => handleToggleFollow(user)}
                             />
                         ))
                     )}

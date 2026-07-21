@@ -36,7 +36,7 @@ interface Wrapped {
 
 /**
  * Satori (the engine behind ImageResponse) fetches remote <img> URLs while rendering, and a single
- * failed fetch aborts the whole image — which is why the downloaded story could come out blank.
+ * failed fetch aborts the whole image, which is why the downloaded story could come out blank.
  * RAWG originals are also multi-megabyte. Prefetching a small cropped variant into a data URI keeps
  * rendering self-contained and lets a broken cover degrade to a placeholder instead of killing the image.
  *
@@ -207,7 +207,7 @@ export async function GET(request: Request) {
                 </div>
             </div>
 
-            {/* Stat tiles — 2x2 grid mirroring the on-screen card */}
+            {/* Stat tiles: 2x2 grid mirroring the on-screen card */}
             <div
                 style={{
                     display: "flex",

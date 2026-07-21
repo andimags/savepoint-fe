@@ -1,31 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Heart } from "lucide-react";
 import {
-    addDiaryEntry,
-    addUserGame,
-    clearRating,
-    getGame,
-    getMe,
-    getMyLists,
-    getRating,
-    getUserGames,
-    setRating,
-    setUserGameStatus,
-    thumbnailUrl,
-    updateProfile,
-    type Game,
     type GameStatus,
-    type ListSummary,
-    type RatingSummary,
-    type UserGame,
     MANUAL_PLATFORMS,
     PLATFORM_LABELS,
 } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
+import { STATUS_OPTIONS } from "@/lib/options";
+import { useAddDiaryEntry } from "@/hooks/use-diary";
+import {
+    useClearRating,
+    useGame,
+    useRating,
+    useSetRating,
+} from "@/hooks/use-games";
+import {
+    useAddUserGame,
+    useLibrary,
+    useSetUserGameStatus,
+} from "@/hooks/use-library";
+import { useMyLists } from "@/hooks/use-lists";
+import { useMe, useUpdateProfile } from "@/hooks/use-me";
 import { AddToList } from "@/components/add-to-list";
+import { GameCover } from "@/components/game-cover";
 import { StarRating } from "@/components/star-rating";
 import { ReviewsSection } from "./reviews-section";
 import { Badge } from "@/components/ui/badge";
@@ -50,24 +50,24 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 
-const STATUS_OPTIONS: { value: GameStatus; label: string }[] = [
-    { value: "PLAYING", label: "Currently Playing" },
-    { value: "FINISHED", label: "Finished" },
-    { value: "BACKLOG", label: "Backlog" },
-    { value: "DROPPED", label: "Dropped" },
-];
-
 const DIARY_PLATFORMS = MANUAL_PLATFORMS.map((p) => PLATFORM_LABELS[p]);
 
 export function GameDetailClient({ gameId }: { gameId: string }) {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
+    const { data: game } = useGame(gameId);
+    const { data: rating } = useRating(gameId);
+    const { data: library } = useLibrary({ gameId, limit: 1 });
+    const { data: lists = [] } = useMyLists();
+    const { data: me } = useMe();
 
-    const [game, setGame] = useState<Game | null>(null);
-    const [rating, setRatingState] = useState<RatingSummary | null>(null);
-    const [userGame, setUserGame] = useState<UserGame | null>(null);
-    const [lists, setLists] = useState<ListSummary[]>([]);
-    const [isFavorite, setIsFavorite] = useState(false);
+    const userGame = library?.items[0] ?? null;
+    const isFavorite = me?.favoriteGameId === gameId;
+
+    const setRating = useSetRating(gameId);
+    const clearRating = useClearRating(gameId);
+    const addUserGame = useAddUserGame();
+    const setUserGameStatus = useSetUserGameStatus();
+    const updateProfile = useUpdateProfile();
+    const addDiaryEntry = useAddDiaryEntry();
 
     const [diaryOpen, setDiaryOpen] = useState(false);
     const [diaryDate, setDiaryDate] = useState(() =>
@@ -76,45 +76,79 @@ export function GameDetailClient({ gameId }: { gameId: string }) {
     const [diaryPlatform, setDiaryPlatform] = useState("Steam");
     const [diaryNote, setDiaryNote] = useState("");
 
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        const [g, r, ug, ls, me] = await Promise.all([
-            getGame(token, gameId),
-            getRating(token, gameId),
-            getUserGames(token, 1, 1, undefined, gameId),
-            getMyLists(token),
-            getMe(token),
-        ]);
-        setGame(g);
-        setRatingState(r);
-        setUserGame(ug.items[0] ?? null);
-        setLists(ls);
-        setIsFavorite(me.favoriteGameId === gameId);
-    }, [token, gameId]);
+    function toggleFavorite() {
+        const next = !isFavorite;
+        updateProfile.mutate(
+            { favoriteGameId: next ? gameId : null },
+            {
+                onSuccess: () =>
+                    toast.success(
+                        next
+                            ? "Set as your favorite game."
+                            : "Removed from favorite.",
+                    ),
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to update favorite."),
+                    ),
+            },
+        );
+    }
 
-    async function toggleFavorite() {
-        if (!token) return;
-        try {
-            const next = !isFavorite;
-            await updateProfile(token, {
-                favoriteGameId: next ? gameId : null,
+    function handleRate(value: number) {
+        if (rating?.userRating === value) {
+            clearRating.mutate(undefined, {
+                onSuccess: () => toast.success("Rating removed."),
             });
-            setIsFavorite(next);
-            toast.success(
-                next ? "Set as your favorite game." : "Removed from favorite.",
-            );
+            return;
+        }
+        setRating.mutate(value, {
+            onSuccess: () =>
+                toast.success(`Rated ${value} star${value > 1 ? "s" : ""}.`),
+        });
+    }
+
+    async function handleStatusChange(value: string) {
+        try {
+            let entry = userGame;
+            if (!entry) {
+                entry = await addUserGame.mutateAsync({
+                    gameId,
+                    platform: "STEAM",
+                });
+            }
+            await setUserGameStatus.mutateAsync({
+                id: entry.id,
+                status: value as GameStatus,
+            });
+            toast.success("Status updated.");
         } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update favorite.",
-            );
+            toast.error(getErrorMessage(error, "Failed to update status."));
         }
     }
 
-    useEffect(() => {
-        refresh().catch(() => toast.error("Failed to load game."));
-    }, [refresh]);
+    function handleLogDiary(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        addDiaryEntry.mutate(
+            {
+                gameId,
+                playedOn: diaryDate,
+                platform: diaryPlatform,
+                note: diaryNote || undefined,
+            },
+            {
+                onSuccess: () => {
+                    setDiaryOpen(false);
+                    setDiaryNote("");
+                    toast.success("Logged to diary.");
+                },
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to log entry."),
+                    ),
+            },
+        );
+    }
 
     if (!game) {
         return (
@@ -126,76 +160,17 @@ export function GameDetailClient({ gameId }: { gameId: string }) {
         );
     }
 
-    async function handleRate(value: number) {
-        if (!token) return;
-        if (rating?.userRating === value) {
-            await clearRating(token, gameId);
-            toast.success("Rating removed.");
-        } else {
-            await setRating(token, gameId, value);
-            toast.success(`Rated ${value} star${value > 1 ? "s" : ""}.`);
-        }
-        setRatingState(await getRating(token, gameId));
-    }
-
-    async function handleStatusChange(value: string) {
-        if (!token) return;
-        try {
-            let entry = userGame;
-            if (!entry) {
-                entry = await addUserGame(token, gameId, "STEAM");
-            }
-            const updated = await setUserGameStatus(
-                token,
-                entry.id,
-                value as GameStatus,
-            );
-            setUserGame(updated);
-            toast.success("Status updated.");
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update status.",
-            );
-        }
-    }
-
-    async function handleLogDiary(event: React.FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        if (!token) return;
-        try {
-            await addDiaryEntry(token, {
-                gameId,
-                playedOn: diaryDate,
-                platform: diaryPlatform,
-                note: diaryNote || undefined,
-            });
-            setDiaryOpen(false);
-            setDiaryNote("");
-            toast.success("Logged to diary.");
-        } catch (error) {
-            toast.error(
-                error instanceof Error ? error.message : "Failed to log entry.",
-            );
-        }
-    }
-
     return (
         <div className="space-y-8">
             {/* Hero */}
             <div className="flex flex-col gap-6 md:flex-row">
                 <div className="w-full shrink-0 overflow-hidden rounded-xl border md:w-96">
-                    {game.coverUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                            src={thumbnailUrl(game.coverUrl) ?? game.coverUrl}
-                            alt={game.name}
-                            className="aspect-video w-full object-cover"
-                        />
-                    ) : (
-                        <div className="aspect-video w-full bg-muted" />
-                    )}
+                    <GameCover
+                        url={game.coverUrl}
+                        alt={game.name}
+                        className="aspect-video w-full"
+                        iconClassName="size-10"
+                    />
                 </div>
                 <div className="min-w-0 flex-1 space-y-4">
                     <div>
@@ -311,7 +286,11 @@ export function GameDetailClient({ gameId }: { gameId: string }) {
                                             placeholder="Beat the final boss..."
                                         />
                                     </div>
-                                    <Button type="submit" className="w-full">
+                                    <Button
+                                        type="submit"
+                                        className="w-full"
+                                        disabled={addDiaryEntry.isPending}
+                                    >
                                         Log entry
                                     </Button>
                                 </form>

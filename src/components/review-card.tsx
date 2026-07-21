@@ -2,18 +2,16 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { Heart, MessageSquare, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { type ReviewView } from "@/lib/api-client";
 import {
-    addReviewComment,
-    deleteComment,
-    getReviewComments,
-    likeReview,
-    unlikeReview,
-    type CommentView,
-    type ReviewView,
-} from "@/lib/api-client";
+    useAddReviewComment,
+    useDeleteComment,
+    useReviewComments,
+    useToggleReviewLike,
+} from "@/hooks/use-reviews";
+import { useCurrentUserId } from "@/hooks/use-token";
 import { StarRating } from "@/components/star-rating";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -32,63 +30,49 @@ export function ReviewCard({
     onDelete?: () => void;
     showGame?: boolean;
 }) {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-    const myUserId = session?.user?.id;
+    const myUserId = useCurrentUserId();
 
     const [liked, setLiked] = useState(review.likedByMe);
     const [likeCount, setLikeCount] = useState(review.likeCount);
     const [commentsOpen, setCommentsOpen] = useState(false);
-    const [comments, setComments] = useState<CommentView[] | null>(null);
-    const [commentCount, setCommentCount] = useState(review.commentCount);
     const [commentDraft, setCommentDraft] = useState("");
 
-    async function toggleLike() {
-        if (!token) return;
-        try {
-            if (liked) {
-                await unlikeReview(token, review.id);
-                setLiked(false);
-                setLikeCount((c) => c - 1);
-            } else {
-                await likeReview(token, review.id);
-                setLiked(true);
-                setLikeCount((c) => c + 1);
-            }
-        } catch {
-            toast.error("Failed to update like.");
-        }
+    const toggleLikeMutation = useToggleReviewLike();
+    const addComment = useAddReviewComment(review.id);
+    const deleteCommentMutation = useDeleteComment(review.id);
+    const { data: commentsData } = useReviewComments(
+        review.id,
+        1,
+        commentsOpen,
+    );
+
+    const comments = commentsData?.items ?? null;
+    const commentCount = commentsData?.total ?? review.commentCount;
+
+    function toggleLike() {
+        // Optimistic: flip immediately, revert if the request fails.
+        const wasLiked = liked;
+        setLiked(!wasLiked);
+        setLikeCount((c) => c + (wasLiked ? -1 : 1));
+        toggleLikeMutation.mutate(
+            { reviewId: review.id, liked: wasLiked },
+            {
+                onError: () => {
+                    setLiked(wasLiked);
+                    setLikeCount((c) => c + (wasLiked ? 1 : -1));
+                    toast.error("Failed to update like.");
+                },
+            },
+        );
     }
 
-    async function toggleComments() {
-        const next = !commentsOpen;
-        setCommentsOpen(next);
-        if (next && comments === null && token) {
-            const data = await getReviewComments(token, review.id);
-            setComments(data.items);
-        }
-    }
-
-    async function submitComment(event: React.FormEvent<HTMLFormElement>) {
+    function submitComment(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token || !commentDraft.trim()) return;
-        try {
-            await addReviewComment(token, review.id, commentDraft.trim());
-            setCommentDraft("");
-            const data = await getReviewComments(token, review.id);
-            setComments(data.items);
-            setCommentCount(data.total);
-        } catch {
-            toast.error("Failed to post comment.");
-        }
-    }
-
-    async function removeComment(commentId: string) {
-        if (!token) return;
-        await deleteComment(token, commentId);
-        const data = await getReviewComments(token, review.id);
-        setComments(data.items);
-        setCommentCount(data.total);
+        if (!commentDraft.trim()) return;
+        addComment.mutate(commentDraft.trim(), {
+            onSuccess: () => setCommentDraft(""),
+            onError: () => toast.error("Failed to post comment."),
+        });
     }
 
     return (
@@ -172,7 +156,7 @@ export function ReviewCard({
                     </button>
                     <button
                         type="button"
-                        onClick={toggleComments}
+                        onClick={() => setCommentsOpen((open) => !open)}
                         className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                     >
                         <MessageSquare className="size-4" />
@@ -202,7 +186,9 @@ export function ReviewCard({
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            removeComment(comment.id)
+                                            deleteCommentMutation.mutate(
+                                                comment.id,
+                                            )
                                         }
                                         className="text-muted-foreground hover:text-destructive"
                                         aria-label="Delete comment"

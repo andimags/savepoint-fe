@@ -1,19 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Gamepad2, Heart, Search, X } from "lucide-react";
-import {
-    getGame,
-    getMe,
-    searchGames,
-    thumbnailUrl,
-    updateProfile,
-    COMMON_GENRES,
-    type Game,
-    type GameRef,
-} from "@/lib/api-client";
+import { Heart, Search, X } from "lucide-react";
+import { COMMON_GENRES, type Game, type GameRef } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
+import { useGameSearch, useGamesByIds } from "@/hooks/use-games";
+import { useMe, useUpdateProfile } from "@/hooks/use-me";
+import { GameCover } from "@/components/game-cover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,62 +21,52 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+interface FavoritesDraft {
+    topGames: GameRef[];
+    favoriteGameId: string | null;
+    genres: string[];
+    franchise: string;
+}
+
+/**
+ * Loads the profile and its top games, then hands a fully-formed initial draft to the editor. The
+ * editor is only mounted once data is ready, so it can seed useState from props with no syncing
+ * effect. The "copy server state into editable local state" concern lives entirely in the mount.
+ */
 export function FavoritesEditor() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
+    const { data: me } = useMe();
+    const topGameQueries = useGamesByIds(me?.topGameIds ?? []);
 
-    const [loaded, setLoaded] = useState(false);
-    const [saving, setSaving] = useState(false);
+    const topGamesLoaded = topGameQueries.every((q) => !q.isPending);
+    if (!me || !topGamesLoaded) return <Skeleton className="h-96 w-full" />;
 
-    const [topGames, setTopGames] = useState<GameRef[]>([]);
-    const [favoriteGameId, setFavoriteGameId] = useState<string | null>(null);
-    const [genres, setGenres] = useState<string[]>([]);
-    const [franchise, setFranchise] = useState("");
+    const initial: FavoritesDraft = {
+        genres: me.favoriteGenres,
+        franchise: me.topFranchise ?? "",
+        favoriteGameId: me.favoriteGameId,
+        topGames: topGameQueries
+            .map((q) => q.data)
+            .filter((g): g is Game => Boolean(g))
+            .map((g) => ({ id: g.id, name: g.name, coverUrl: g.coverUrl })),
+    };
+
+    return <FavoritesForm initial={initial} />;
+}
+
+function FavoritesForm({ initial }: { initial: FavoritesDraft }) {
+    const updateProfile = useUpdateProfile();
+
+    const [topGames, setTopGames] = useState<GameRef[]>(initial.topGames);
+    const [favoriteGameId, setFavoriteGameId] = useState<string | null>(
+        initial.favoriteGameId,
+    );
+    const [genres, setGenres] = useState<string[]>(initial.genres);
+    const [franchise, setFranchise] = useState(initial.franchise);
 
     const [query, setQuery] = useState("");
-    const [results, setResults] = useState<Game[]>([]);
-    const [searching, setSearching] = useState(false);
-
-    useEffect(() => {
-        if (!token) return;
-        (async () => {
-            const me = await getMe(token);
-            setGenres(me.favoriteGenres);
-            setFranchise(me.topFranchise ?? "");
-            setFavoriteGameId(me.favoriteGameId);
-            if (me.topGameIds.length > 0) {
-                const games = await Promise.all(
-                    me.topGameIds.map((id) =>
-                        getGame(token, id).catch(() => null),
-                    ),
-                );
-                setTopGames(
-                    games
-                        .filter((g): g is Game => Boolean(g))
-                        .map((g) => ({
-                            id: g.id,
-                            name: g.name,
-                            coverUrl: g.coverUrl,
-                        })),
-                );
-            }
-            setLoaded(true);
-        })().catch(() => {
-            toast.error("Failed to load favorites.");
-            setLoaded(true);
-        });
-    }, [token]);
-
-    async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        if (!token || !query.trim()) return;
-        setSearching(true);
-        try {
-            setResults(await searchGames(token, query.trim()));
-        } finally {
-            setSearching(false);
-        }
-    }
+    const [searchTerm, setSearchTerm] = useState("");
+    const { data: results = [], isFetching: searching } =
+        useGameSearch(searchTerm);
 
     function addGame(game: Game) {
         if (topGames.length >= 5 || topGames.some((g) => g.id === game.id))
@@ -123,29 +107,28 @@ export function FavoritesEditor() {
         );
     }
 
-    async function save() {
-        if (!token) return;
-        setSaving(true);
-        try {
-            await updateProfile(token, {
+    function handleSearch(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setSearchTerm(query.trim());
+    }
+
+    function save() {
+        updateProfile.mutate(
+            {
                 favoriteGameId,
                 topGameIds: topGames.map((g) => g.id),
                 favoriteGenres: genres,
                 topFranchise: franchise.trim() || null,
-            });
-            toast.success("Favorites saved.");
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to save favorites.",
-            );
-        } finally {
-            setSaving(false);
-        }
+            },
+            {
+                onSuccess: () => toast.success("Favorites saved."),
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to save favorites."),
+                    ),
+            },
+        );
     }
-
-    if (!loaded) return <Skeleton className="h-96 w-full" />;
 
     return (
         <Card>
@@ -198,21 +181,11 @@ export function FavoritesEditor() {
                                     <span className="w-5 text-center text-sm font-semibold text-primary">
                                         {index + 1}
                                     </span>
-                                    {game.coverUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={
-                                                thumbnailUrl(game.coverUrl) ??
-                                                game.coverUrl
-                                            }
-                                            alt=""
-                                            className="h-9 w-14 rounded object-cover"
-                                        />
-                                    ) : (
-                                        <div className="flex h-9 w-14 items-center justify-center rounded bg-muted">
-                                            <Gamepad2 className="size-4 text-muted-foreground" />
-                                        </div>
-                                    )}
+                                    <GameCover
+                                        url={game.coverUrl}
+                                        className="h-9 w-14 rounded"
+                                        iconClassName="size-4"
+                                    />
                                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
                                         {game.name}
                                     </span>
@@ -225,9 +198,7 @@ export function FavoritesEditor() {
                                                 ? `Remove ${game.name} as favorite game`
                                                 : `Set ${game.name} as favorite game`
                                         }
-                                        aria-pressed={
-                                            favoriteGameId === game.id
-                                        }
+                                        aria-pressed={favoriteGameId === game.id}
                                         className={cn(
                                             "text-muted-foreground hover:text-brand",
                                             favoriteGameId === game.id &&
@@ -291,20 +262,11 @@ export function FavoritesEditor() {
                                             )}
                                             className="flex w-full items-center gap-3 rounded-md p-1.5 text-left hover:bg-accent disabled:opacity-40"
                                         >
-                                            {game.coverUrl ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img
-                                                    src={
-                                                        thumbnailUrl(
-                                                            game.coverUrl,
-                                                        ) ?? game.coverUrl
-                                                    }
-                                                    alt=""
-                                                    className="h-8 w-12 rounded object-cover"
-                                                />
-                                            ) : (
-                                                <div className="h-8 w-12 rounded bg-muted" />
-                                            )}
+                                            <GameCover
+                                                url={game.coverUrl}
+                                                className="h-8 w-12 rounded"
+                                                iconClassName="size-3.5"
+                                            />
                                             <span className="truncate text-sm">
                                                 {game.name}
                                             </span>
@@ -353,8 +315,8 @@ export function FavoritesEditor() {
                     />
                 </div>
 
-                <Button onClick={save} disabled={saving}>
-                    {saving ? "Saving..." : "Save favorites"}
+                <Button onClick={save} disabled={updateProfile.isPending}>
+                    {updateProfile.isPending ? "Saving..." : "Save favorites"}
                 </Button>
             </CardContent>
         </Card>

@@ -1,17 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
-import {
-    addUserGame,
-    MANUAL_PLATFORMS,
-    PLATFORM_LABELS,
-    STATUS_LABELS,
-    type GameStatus,
-    type Platform,
-} from "@/lib/api-client";
+import { type GameStatus, type Platform } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
+import { PLATFORM_OPTIONS, STATUS_OPTIONS } from "@/lib/options";
+import { useAddUserGame } from "@/hooks/use-library";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,8 +24,6 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
-const STATUSES: GameStatus[] = ["PLAYING", "FINISHED", "BACKLOG", "DROPPED"];
-
 export function AddToLibrary({
     gameId,
     gameName,
@@ -44,28 +37,24 @@ export function AddToLibrary({
     variant?: "default" | "outline" | "secondary";
     className?: string;
 }) {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
+    const addUserGame = useAddUserGame();
 
     const [open, setOpen] = useState(false);
     const [platform, setPlatform] = useState<Platform>("STEAM");
     const [status, setStatus] = useState<GameStatus>("BACKLOG");
-    const [saving, setSaving] = useState(false);
 
-    async function handleAdd() {
-        if (!token) return;
-        setSaving(true);
-        try {
-            await addUserGame(token, gameId, platform, status);
-            toast.success(`Added ${gameName} to your library.`);
-            setOpen(false);
-        } catch (error) {
-            toast.error(
-                error instanceof Error ? error.message : "Failed to add game.",
-            );
-        } finally {
-            setSaving(false);
-        }
+    function handleAdd() {
+        addUserGame.mutate(
+            { gameId, platform, status },
+            {
+                onSuccess: () => {
+                    toast.success(`Added ${gameName} to your library.`);
+                    setOpen(false);
+                },
+                onError: (error) =>
+                    toast.error(getErrorMessage(error, "Failed to add game.")),
+            },
+        );
     }
 
     return (
@@ -90,9 +79,9 @@ export function AddToLibrary({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {MANUAL_PLATFORMS.map((p) => (
-                                    <SelectItem key={p} value={p}>
-                                        {PLATFORM_LABELS[p]}
+                                {PLATFORM_OPTIONS.map((p) => (
+                                    <SelectItem key={p.value} value={p.value}>
+                                        {p.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -108,9 +97,9 @@ export function AddToLibrary({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {STATUSES.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                        {STATUS_LABELS[s]}
+                                {STATUS_OPTIONS.map((s) => (
+                                    <SelectItem key={s.value} value={s.value}>
+                                        {s.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -118,10 +107,10 @@ export function AddToLibrary({
                     </div>
                     <Button
                         onClick={handleAdd}
-                        disabled={saving}
+                        disabled={addUserGame.isPending}
                         className="w-full"
                     >
-                        {saving ? "Adding..." : "Add to library"}
+                        {addUserGame.isPending ? "Adding..." : "Add to library"}
                     </Button>
                 </div>
             </DialogContent>

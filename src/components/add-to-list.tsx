@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ListPlus } from "lucide-react";
-import { addListItem, type ListSummary } from "@/lib/api-client";
+import { type ListSummary } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
+import { useAddListItem } from "@/hooks/use-lists";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -34,25 +34,19 @@ export function AddToList({
     iconOnly?: boolean;
     className?: string;
 }) {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-    const [busy, setBusy] = useState(false);
+    const addListItem = useAddListItem();
 
-    async function handleAddToList(listId: string, listTitle: string) {
-        if (!token) return;
-        setBusy(true);
-        try {
-            await addListItem(token, listId, gameId);
-            toast.success(`Added to ${listTitle}.`);
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to add to list.",
-            );
-        } finally {
-            setBusy(false);
-        }
+    function handleAddToList(listId: string, listTitle: string) {
+        addListItem.mutate(
+            { listId, gameId },
+            {
+                onSuccess: () => toast.success(`Added to ${listTitle}.`),
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to add to list."),
+                    ),
+            },
+        );
     }
 
     return (
@@ -62,7 +56,7 @@ export function AddToList({
                     size={size}
                     variant={variant}
                     className={className}
-                    disabled={busy}
+                    disabled={addListItem.isPending}
                     aria-label={iconOnly ? label : undefined}
                 >
                     <ListPlus
@@ -74,7 +68,7 @@ export function AddToList({
             <DropdownMenuContent align="end">
                 {lists.length === 0 ? (
                     <DropdownMenuItem disabled>
-                        No lists yet — create one first
+                        No lists yet, create one first
                     </DropdownMenuItem>
                 ) : (
                     lists.map((list) => (
