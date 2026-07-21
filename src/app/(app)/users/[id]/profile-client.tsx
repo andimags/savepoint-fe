@@ -144,7 +144,14 @@ export function ProfileClient({ userId }: { userId: string }) {
                         </p>
                     )}
                     <p className="text-sm text-muted-foreground">
-                        {profile.gameCount} games ·{" "}
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("games")}
+                            className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-1 focus-visible:outline-ring"
+                        >
+                            {profile.gameCount} games
+                        </button>{" "}
+                        ·{" "}
                         <button
                             type="button"
                             onClick={() => setActiveTab("followers")}
