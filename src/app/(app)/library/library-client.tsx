@@ -302,106 +302,119 @@ export function LibraryClient() {
                         {data.items.map((userGame) => (
                             <div
                                 key={userGame.id}
-                                className="flex items-center gap-3 rounded-lg border bg-card p-3"
+                                className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"
                             >
-                                <Link
-                                    href={`/games/${userGame.gameId}`}
-                                    className="shrink-0"
-                                >
-                                    {userGame.game.coverUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={
-                                                thumbnailUrl(
-                                                    userGame.game.coverUrl,
-                                                ) ?? userGame.game.coverUrl
-                                            }
-                                            alt=""
-                                            loading="lazy"
-                                            className="h-14 w-24 rounded-md object-cover"
-                                        />
-                                    ) : (
-                                        <div className="flex h-14 w-24 items-center justify-center rounded-md bg-muted">
-                                            <Gamepad2 className="size-5 text-muted-foreground" />
-                                        </div>
-                                    )}
-                                </Link>
-                                <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 items-center gap-3">
                                     <Link
                                         href={`/games/${userGame.gameId}`}
-                                        className="block truncate text-sm font-medium hover:underline"
+                                        className="shrink-0"
                                     >
-                                        {userGame.game.name}
-                                    </Link>
-                                    <p className="text-xs text-muted-foreground">
-                                        {formatPlaytime(
-                                            userGame.playtimeMinutes,
+                                        {userGame.game.coverUrl ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                                src={
+                                                    thumbnailUrl(
+                                                        userGame.game
+                                                            .coverUrl,
+                                                    ) ?? userGame.game.coverUrl
+                                                }
+                                                alt=""
+                                                loading="lazy"
+                                                className="h-14 w-24 rounded-md object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex h-14 w-24 items-center justify-center rounded-md bg-muted">
+                                                <Gamepad2 className="size-5 text-muted-foreground" />
+                                            </div>
                                         )}
-                                    </p>
+                                    </Link>
+                                    <div className="min-w-0 flex-1">
+                                        <Link
+                                            href={`/games/${userGame.gameId}`}
+                                            className="block truncate text-sm font-medium hover:underline"
+                                        >
+                                            {userGame.game.name}
+                                        </Link>
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatPlaytime(
+                                                userGame.playtimeMinutes,
+                                            )}
+                                        </p>
+                                    </div>
                                 </div>
-                                <Select
-                                    value={userGame.platform}
-                                    onValueChange={(value) =>
-                                        handlePlatformChange(userGame, value)
-                                    }
-                                >
-                                    <SelectTrigger
-                                        size="sm"
-                                        className="w-32 shrink-0"
+                                <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:shrink-0">
+                                    <Select
+                                        value={userGame.platform}
+                                        onValueChange={(value) =>
+                                            handlePlatformChange(
+                                                userGame,
+                                                value,
+                                            )
+                                        }
                                     >
-                                        <SelectValue placeholder="Platform" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {PLATFORM_OPTIONS.map((opt) => (
-                                            <SelectItem
-                                                key={opt.value}
-                                                value={opt.value}
-                                            >
-                                                {opt.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={userGame.status}
-                                    onValueChange={(value) =>
-                                        handleStatusChange(userGame, value)
-                                    }
-                                >
-                                    <SelectTrigger
-                                        size="sm"
-                                        className="w-32 shrink-0"
+                                        <SelectTrigger
+                                            size="sm"
+                                            className="w-32 shrink-0"
+                                        >
+                                            <SelectValue placeholder="Platform" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {PLATFORM_OPTIONS.map((opt) => (
+                                                <SelectItem
+                                                    key={opt.value}
+                                                    value={opt.value}
+                                                >
+                                                    {opt.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        value={userGame.status}
+                                        onValueChange={(value) =>
+                                            handleStatusChange(
+                                                userGame,
+                                                value,
+                                            )
+                                        }
                                     >
-                                        <SelectValue placeholder="Status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {STATUS_OPTIONS.map((opt) => (
-                                            <SelectItem
-                                                key={opt.value}
-                                                value={opt.value}
-                                            >
-                                                {opt.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <AddToList
-                                    gameId={userGame.gameId}
-                                    lists={lists}
-                                    size="icon-sm"
-                                    variant="ghost"
-                                    iconOnly
-                                    className="shrink-0"
-                                />
-                                <Button
-                                    size="icon-sm"
-                                    variant="ghost"
-                                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                                    aria-label={`Remove ${userGame.game.name} from library`}
-                                    onClick={() => setPendingRemoval(userGame)}
-                                >
-                                    <Trash2 />
-                                </Button>
+                                        <SelectTrigger
+                                            size="sm"
+                                            className="w-32 shrink-0"
+                                        >
+                                            <SelectValue placeholder="Status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {STATUS_OPTIONS.map((opt) => (
+                                                <SelectItem
+                                                    key={opt.value}
+                                                    value={opt.value}
+                                                >
+                                                    {opt.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <AddToList
+                                        gameId={userGame.gameId}
+                                        lists={lists}
+                                        size="icon-sm"
+                                        variant="ghost"
+                                        iconOnly
+                                        className="shrink-0"
+                                    />
+                                    <Button
+                                        size="icon-sm"
+                                        variant="ghost"
+                                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                                        aria-label={`Remove ${userGame.game.name} from library`}
+                                        onClick={() =>
+                                            setPendingRemoval(userGame)
+                                        }
+                                    >
+                                        <Trash2 />
+                                    </Button>
+                                </div>
                             </div>
                         ))}
                     </div>
