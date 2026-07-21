@@ -42,8 +42,8 @@ export function PsnCard() {
             await connectPsn(token, npsso);
             toast.success(
                 wasConnected
-                    ? "PlayStation reconnected — re-syncing your library."
-                    : "PlayStation connected — syncing your library.",
+                    ? "PlayStation reconnected, re-syncing your library."
+                    : "PlayStation connected, syncing your library.",
             );
             setDialogOpen(false);
             await refresh();

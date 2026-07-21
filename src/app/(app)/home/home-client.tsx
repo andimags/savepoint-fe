@@ -121,7 +121,7 @@ function ListActivityCard({
                 </Link>
                 <p className="truncate text-xs text-muted-foreground">
                     {list.itemCount} {list.itemCount === 1 ? "game" : "games"}
-                    {list.description ? ` — ${list.description}` : ""}
+                    {list.description ? ` · ${list.description}` : ""}
                 </p>
                 {createdAt && (
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -258,7 +258,7 @@ export function HomeClient() {
 
     return (
         <div className="space-y-8">
-            {/* Friends currently playing — slim strip */}
+            {/* Friends currently playing: slim strip */}
             {friendsFeed && friendsFeed.length > 0 && (
                 <section className="space-y-3">
                     <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
@@ -300,7 +300,7 @@ export function HomeClient() {
                 </section>
             )}
 
-            {/* Recommendations — slim strip */}
+            {/* Recommendations: slim strip */}
             {recs && recs.length > 0 && (
                 <section className="space-y-3">
                     <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
@@ -320,7 +320,7 @@ export function HomeClient() {
                 </section>
             )}
 
-            {/* Activity feed — infinite scroll */}
+            {/* Activity feed: infinite scroll */}
             <section className="space-y-4">
                 <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
                     Activity

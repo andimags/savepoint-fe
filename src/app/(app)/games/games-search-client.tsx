@@ -113,7 +113,7 @@ export function GamesSearchClient({ query }: { query: string }) {
                                         {game.name}
                                     </p>
                                     <p className="truncate text-xs text-muted-foreground">
-                                        {game.releaseDate?.slice(0, 4) ?? "—"}
+                                        {game.releaseDate?.slice(0, 4) ?? "-"}
                                         {game.genres.length > 0 &&
                                             ` · ${game.genres.slice(0, 2).join(", ")}`}
                                     </p>

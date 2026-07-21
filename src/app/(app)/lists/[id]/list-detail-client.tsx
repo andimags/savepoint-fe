@@ -112,7 +112,7 @@ export function ListDetailClient({ listId }: { listId: string }) {
                         >
                             {list.owner.username}
                         </Link>
-                        {list.description && <> — {list.description}</>}
+                        {list.description && <> · {list.description}</>}
                     </p>
                 </div>
                 {isOwner && (

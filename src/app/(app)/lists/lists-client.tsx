@@ -136,7 +136,7 @@ export function ListsClient() {
                                             ? "game"
                                             : "games"}
                                         {list.description
-                                            ? ` — ${list.description}`
+                                            ? ` · ${list.description}`
                                             : ""}
                                     </CardDescription>
                                 </CardHeader>

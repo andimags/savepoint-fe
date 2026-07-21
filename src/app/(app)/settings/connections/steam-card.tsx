@@ -41,8 +41,8 @@ export function SteamCard() {
             await connectSteam(token, profileInput);
             toast.success(
                 wasConnected
-                    ? "Steam profile updated — re-syncing your library."
-                    : "Steam connected — syncing your library.",
+                    ? "Steam profile updated, re-syncing your library."
+                    : "Steam connected, syncing your library.",
             );
             setDialogOpen(false);
             await refresh();

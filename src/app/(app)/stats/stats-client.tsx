@@ -86,7 +86,7 @@ export function StatsClient() {
                     value={
                         stats.completionRate != null
                             ? `${Math.round(stats.completionRate * 100)}%`
-                            : "—"
+                            : "-"
                     }
                 />
                 <StatCard
@@ -106,7 +106,7 @@ export function StatsClient() {
                     <CardContent>
                         {genreChartData.length === 0 ? (
                             <p className="py-8 text-center text-sm text-muted-foreground">
-                                No genre data yet — game details fill in as your
+                                No genre data yet, game details fill in as your
                                 library syncs with RAWG.
                             </p>
                         ) : (
@@ -213,7 +213,7 @@ export function StatsClient() {
                             ? formatHours(
                                   stats.totalPlaytimeMinutes / stats.totalGames,
                               )
-                            : "—"
+                            : "-"
                     }
                 />
             </div>

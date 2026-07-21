@@ -81,7 +81,7 @@ export function ReviewsSection({ gameId }: { gameId: string }) {
                 <Skeleton className="h-32 w-full" />
             ) : reviews.items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                    No reviews yet — be the first.
+                    No reviews yet, be the first.
                 </p>
             ) : (
                 <div className="space-y-4">

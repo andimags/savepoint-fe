@@ -74,7 +74,7 @@ export function AddToList({
             <DropdownMenuContent align="end">
                 {lists.length === 0 ? (
                     <DropdownMenuItem disabled>
-                        No lists yet — create one first
+                        No lists yet, create one first
                     </DropdownMenuItem>
                 ) : (
                     lists.map((list) => (

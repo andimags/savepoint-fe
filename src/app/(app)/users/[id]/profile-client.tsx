@@ -440,7 +440,7 @@ export function ProfileClient({ userId }: { userId: string }) {
                                                         ? "game"
                                                         : "games"}
                                                     {list.description
-                                                        ? ` — ${list.description}`
+                                                        ? ` · ${list.description}`
                                                         : ""}
                                                 </p>
                                             </div>
