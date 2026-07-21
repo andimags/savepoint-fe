@@ -1,64 +1,47 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 import {
-    createReview,
-    deleteReview,
-    getGameReviews,
-    type Paginated,
-    type ReviewView,
-} from "@/lib/api-client";
+    useCreateReview,
+    useDeleteReview,
+    useGameReviews,
+} from "@/hooks/use-reviews";
+import { useCurrentUserId } from "@/hooks/use-token";
 import { ReviewCard } from "@/components/review-card";
+import { Pager } from "@/components/pager";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function ReviewsSection({ gameId }: { gameId: string }) {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-    const myUserId = session?.user?.id;
+    const myUserId = useCurrentUserId();
 
-    const [reviews, setReviews] = useState<Paginated<ReviewView> | null>(null);
     const [page, setPage] = useState(1);
     const [draft, setDraft] = useState("");
-    const [submitting, setSubmitting] = useState(false);
 
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        setReviews(await getGameReviews(token, gameId, page));
-    }, [token, gameId, page]);
+    const { data: reviews } = useGameReviews(gameId, page);
+    const createReview = useCreateReview(gameId);
+    const deleteReview = useDeleteReview(gameId);
 
-    useEffect(() => {
-        refresh().catch(() => {});
-    }, [refresh]);
-
-    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token || !draft.trim()) return;
-        setSubmitting(true);
-        try {
-            await createReview(token, gameId, draft.trim());
-            setDraft("");
-            toast.success("Review posted.");
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to post review.",
-            );
-        } finally {
-            setSubmitting(false);
-        }
+        if (!draft.trim()) return;
+        createReview.mutate(draft.trim(), {
+            onSuccess: () => {
+                setDraft("");
+                toast.success("Review posted.");
+            },
+            onError: (error) =>
+                toast.error(getErrorMessage(error, "Failed to post review.")),
+        });
     }
 
-    async function handleDelete(reviewId: string) {
-        if (!token) return;
-        await deleteReview(token, reviewId);
-        toast.success("Review deleted.");
-        await refresh();
+    function handleDelete(reviewId: string) {
+        deleteReview.mutate(reviewId, {
+            onSuccess: () => toast.success("Review deleted."),
+        });
     }
 
     return (
@@ -72,8 +55,11 @@ export function ReviewsSection({ gameId }: { gameId: string }) {
                     placeholder="Write your review..."
                     rows={4}
                 />
-                <Button type="submit" disabled={submitting || !draft.trim()}>
-                    {submitting ? "Posting..." : "Post review"}
+                <Button
+                    type="submit"
+                    disabled={createReview.isPending || !draft.trim()}
+                >
+                    {createReview.isPending ? "Posting..." : "Post review"}
                 </Button>
             </form>
 
@@ -81,7 +67,7 @@ export function ReviewsSection({ gameId }: { gameId: string }) {
                 <Skeleton className="h-32 w-full" />
             ) : reviews.items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                    No reviews yet — be the first.
+                    No reviews yet, be the first.
                 </p>
             ) : (
                 <div className="space-y-4">
@@ -93,29 +79,11 @@ export function ReviewsSection({ gameId }: { gameId: string }) {
                             onDelete={() => handleDelete(review.id)}
                         />
                     ))}
-                    {reviews.totalPages > 1 && (
-                        <div className="flex items-center justify-between">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page <= 1}
-                                onClick={() => setPage((p) => p - 1)}
-                            >
-                                Previous
-                            </Button>
-                            <span className="text-sm text-muted-foreground">
-                                Page {reviews.page} of {reviews.totalPages}
-                            </span>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page >= reviews.totalPages}
-                                onClick={() => setPage((p) => p + 1)}
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    )}
+                    <Pager
+                        page={page}
+                        totalPages={reviews.totalPages}
+                        onPageChange={setPage}
+                    />
                 </div>
             )}
         </section>

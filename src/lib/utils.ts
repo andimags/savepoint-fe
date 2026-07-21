@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPlaytime(minutes: number): string {
-    if (minutes === 0) return "—";
+    if (minutes === 0) return "-";
     const hours = minutes / 60;
     return hours < 1 ? `${minutes} min` : `${hours.toFixed(1)} hrs`;
 }

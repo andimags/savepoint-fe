@@ -1,14 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { Download, Gamepad2, Clock, PenLine, Star } from "lucide-react";
-import {
-    getWrapped,
-    thumbnailUrl,
-    wrappedTagline,
-    type Wrapped,
-} from "@/lib/api-client";
+import { wrappedTagline } from "@/lib/api-client";
+import { useWrapped } from "@/hooks/use-stats";
+import { useCurrentUsername } from "@/hooks/use-token";
+import { GameCover } from "@/components/game-cover";
 import { LogoMark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,30 +34,19 @@ const MONTHS = [
 ];
 
 export function WrappedClient() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-
     const currentYear = new Date().getFullYear();
     const [year, setYear] = useState(currentYear);
     const [month, setMonth] = useState<number | "all">("all");
-    const [wrapped, setWrapped] = useState<Wrapped | null>(null);
 
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        setWrapped(null);
-        setWrapped(
-            await getWrapped(token, year, month === "all" ? undefined : month),
-        );
-    }, [token, year, month]);
-
-    useEffect(() => {
-        refresh().catch(() => {});
-    }, [refresh]);
+    const { data: wrapped } = useWrapped(
+        year,
+        month === "all" ? undefined : month,
+    );
+    const username = useCurrentUsername();
 
     const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
     const periodLabel =
         month === "all" ? String(year) : `${MONTHS[month - 1]} ${year}`;
-    const username = session?.user?.username;
 
     return (
         <div className="space-y-6">
@@ -215,22 +201,11 @@ export function WrappedClient() {
                                             <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-brand text-sm font-bold text-primary-foreground">
                                                 {index + 1}
                                             </span>
-                                            {game.coverUrl ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img
-                                                    src={
-                                                        thumbnailUrl(
-                                                            game.coverUrl,
-                                                        ) ?? game.coverUrl
-                                                    }
-                                                    alt=""
-                                                    className="h-11 w-16 shrink-0 rounded-lg object-cover"
-                                                />
-                                            ) : (
-                                                <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                                    <Gamepad2 className="size-4 text-muted-foreground" />
-                                                </div>
-                                            )}
+                                            <GameCover
+                                                url={game.coverUrl}
+                                                className="h-11 w-16 shrink-0 rounded-lg"
+                                                iconClassName="size-4"
+                                            />
                                             <span className="min-w-0 flex-1 truncate text-sm font-medium">
                                                 {game.name}
                                             </span>

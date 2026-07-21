@@ -1,30 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Gamepad2, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
-    addUserGame,
-    getMyLists,
-    getUserGames,
-    removeUserGame,
-    searchGames,
-    setUserGamePlatform,
-    setUserGameStatus,
     type Game,
     type GameStatus,
-    type ListSummary,
-    type Paginated,
     type Platform,
     type UserGame,
-    MANUAL_PLATFORMS,
-    PLATFORM_LABELS,
-    thumbnailUrl,
 } from "@/lib/api-client";
-import { AddToList } from "@/components/add-to-list";
+import { getErrorMessage } from "@/lib/errors";
+import {
+    PLATFORM_OPTIONS,
+    STATUS_FILTERS,
+    STATUS_SHORT_OPTIONS,
+} from "@/lib/options";
 import { formatPlaytime } from "@/lib/utils";
+import {
+    useAddUserGame,
+    useLibrary,
+    useRemoveUserGame,
+    useSetUserGamePlatform,
+    useSetUserGameStatus,
+} from "@/hooks/use-library";
+import { useMyLists } from "@/hooks/use-lists";
+import { useGameSearch } from "@/hooks/use-games";
+import { AddToList } from "@/components/add-to-list";
+import { GameCover } from "@/components/game-cover";
+import { Pager } from "@/components/pager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,138 +51,89 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 
-const STATUS_TABS: { value: string; label: string }[] = [
-    { value: "ALL", label: "All" },
-    { value: "PLAYING", label: "Playing" },
-    { value: "FINISHED", label: "Finished" },
-    { value: "BACKLOG", label: "Backlog" },
-    { value: "DROPPED", label: "Dropped" },
-];
-
-const STATUS_OPTIONS: { value: GameStatus; label: string }[] = [
-    { value: "PLAYING", label: "Playing" },
-    { value: "FINISHED", label: "Finished" },
-    { value: "BACKLOG", label: "Backlog" },
-    { value: "DROPPED", label: "Dropped" },
-];
-
-const PLATFORM_OPTIONS: { value: Platform; label: string }[] =
-    MANUAL_PLATFORMS.map((p) => ({
-        value: p,
-        label: PLATFORM_LABELS[p],
-    }));
-
 export function LibraryClient() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-
     const [tab, setTab] = useState("ALL");
     const [page, setPage] = useState(1);
-    const [data, setData] = useState<Paginated<UserGame> | null>(null);
-    const [lists, setLists] = useState<ListSummary[]>([]);
+
+    const status = tab === "ALL" ? undefined : (tab as GameStatus);
+    const { data, isPending } = useLibrary({ page, limit: 24, status });
+    const { data: lists = [] } = useMyLists();
+
+    const setStatus = useSetUserGameStatus();
+    const setPlatform = useSetUserGamePlatform();
+    const addUserGame = useAddUserGame();
+    const removeUserGame = useRemoveUserGame();
 
     const [addOpen, setAddOpen] = useState(false);
     const [addQuery, setAddQuery] = useState("");
-    const [addResults, setAddResults] = useState<Game[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
     const [addPlatform, setAddPlatform] = useState<Platform>("STEAM");
-    const [searching, setSearching] = useState(false);
+    const { data: addResults = [], isFetching: searching } =
+        useGameSearch(searchTerm);
 
     const [pendingRemoval, setPendingRemoval] = useState<UserGame | null>(null);
-    const [removing, setRemoving] = useState(false);
 
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        const status = tab === "ALL" ? undefined : (tab as GameStatus);
-        setData(await getUserGames(token, page, 24, status));
-    }, [token, page, tab]);
-
-    useEffect(() => {
-        refresh().catch(() => {});
-    }, [refresh]);
-
-    useEffect(() => {
-        if (!token) return;
-        getMyLists(token)
-            .then(setLists)
-            .catch(() => setLists([]));
-    }, [token]);
-
-    async function handleStatusChange(userGame: UserGame, value: string) {
-        if (!token) return;
-        try {
-            await setUserGameStatus(token, userGame.id, value as GameStatus);
-            toast.success("Status updated.");
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update status.",
-            );
-        }
+    function handleStatusChange(userGame: UserGame, value: string) {
+        setStatus.mutate(
+            { id: userGame.id, status: value as GameStatus },
+            {
+                onSuccess: () => toast.success("Status updated."),
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to update status."),
+                    ),
+            },
+        );
     }
 
-    async function handlePlatformChange(userGame: UserGame, value: string) {
-        if (!token || value === userGame.platform) return;
-        try {
-            await setUserGamePlatform(token, userGame.id, value as Platform);
-            toast.success("Platform updated.");
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update platform.",
-            );
-        }
+    function handlePlatformChange(userGame: UserGame, value: string) {
+        if (value === userGame.platform) return;
+        setPlatform.mutate(
+            { id: userGame.id, platform: value as Platform },
+            {
+                onSuccess: () => toast.success("Platform updated."),
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to update platform."),
+                    ),
+            },
+        );
     }
 
-    async function handleAddSearch(event: React.FormEvent<HTMLFormElement>) {
+    function handleAddSearch(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token || !addQuery.trim()) return;
-        setSearching(true);
-        try {
-            setAddResults(await searchGames(token, addQuery.trim()));
-        } finally {
-            setSearching(false);
-        }
+        setSearchTerm(addQuery.trim());
     }
 
-    async function handleRemoveGame() {
-        if (!token || !pendingRemoval) return;
-        setRemoving(true);
-        try {
-            await removeUserGame(token, pendingRemoval.id);
-            toast.success(
-                `${pendingRemoval.game.name} removed from your library.`,
-            );
-            setPendingRemoval(null);
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to remove game.",
-            );
-        } finally {
-            setRemoving(false);
-        }
+    function handleRemoveGame() {
+        if (!pendingRemoval) return;
+        const removed = pendingRemoval;
+        removeUserGame.mutate(removed.id, {
+            onSuccess: () => {
+                toast.success(
+                    `${removed.game.name} removed from your library.`,
+                );
+                setPendingRemoval(null);
+            },
+            onError: (error) =>
+                toast.error(getErrorMessage(error, "Failed to remove game.")),
+        });
     }
 
-    async function handleAddGame(game: Game) {
-        if (!token) return;
-        try {
-            await addUserGame(token, game.id, addPlatform);
-            toast.success(`${game.name} added to your library.`);
-            setAddOpen(false);
-            setAddQuery("");
-            setAddResults([]);
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error ? error.message : "Failed to add game.",
-            );
-        }
+    function handleAddGame(game: Game) {
+        addUserGame.mutate(
+            { gameId: game.id, platform: addPlatform },
+            {
+                onSuccess: () => {
+                    toast.success(`${game.name} added to your library.`);
+                    setAddOpen(false);
+                    setAddQuery("");
+                    setSearchTerm("");
+                },
+                onError: (error) =>
+                    toast.error(getErrorMessage(error, "Failed to add game.")),
+            },
+        );
     }
 
     return (
@@ -192,7 +147,7 @@ export function LibraryClient() {
                     }}
                 >
                     <TabsList>
-                        {STATUS_TABS.map((t) => (
+                        {STATUS_FILTERS.map((t) => (
                             <TabsTrigger key={t.value} value={t.value}>
                                 {t.label}
                             </TabsTrigger>
@@ -254,21 +209,11 @@ export function LibraryClient() {
                                     onClick={() => handleAddGame(game)}
                                     className="flex w-full items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-accent"
                                 >
-                                    {game.coverUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={
-                                                thumbnailUrl(game.coverUrl) ??
-                                                game.coverUrl
-                                            }
-                                            alt=""
-                                            className="h-10 w-16 rounded object-cover"
-                                        />
-                                    ) : (
-                                        <div className="flex h-10 w-16 items-center justify-center rounded bg-muted">
-                                            <Gamepad2 className="size-4 text-muted-foreground" />
-                                        </div>
-                                    )}
+                                    <GameCover
+                                        url={game.coverUrl}
+                                        className="h-10 w-16 rounded"
+                                        iconClassName="size-4"
+                                    />
                                     <div className="min-w-0">
                                         <p className="truncate text-sm font-medium">
                                             {game.name}
@@ -285,13 +230,13 @@ export function LibraryClient() {
                 </Dialog>
             </div>
 
-            {!data ? (
+            {isPending ? (
                 <div className="grid grid-cols-1 gap-3">
                     {Array.from({ length: 6 }).map((_, i) => (
                         <Skeleton key={i} className="h-20 w-full" />
                     ))}
                 </div>
-            ) : data.items.length === 0 ? (
+            ) : !data || data.items.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
                     Nothing here yet. Add games manually or connect Steam in
                     Settings → Connections.
@@ -309,24 +254,11 @@ export function LibraryClient() {
                                         href={`/games/${userGame.gameId}`}
                                         className="shrink-0"
                                     >
-                                        {userGame.game.coverUrl ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img
-                                                src={
-                                                    thumbnailUrl(
-                                                        userGame.game
-                                                            .coverUrl,
-                                                    ) ?? userGame.game.coverUrl
-                                                }
-                                                alt=""
-                                                loading="lazy"
-                                                className="h-14 w-24 rounded-md object-cover"
-                                            />
-                                        ) : (
-                                            <div className="flex h-14 w-24 items-center justify-center rounded-md bg-muted">
-                                                <Gamepad2 className="size-5 text-muted-foreground" />
-                                            </div>
-                                        )}
+                                        <GameCover
+                                            url={userGame.game.coverUrl}
+                                            loading="lazy"
+                                            className="h-14 w-24 rounded-md"
+                                        />
                                     </Link>
                                     <div className="min-w-0 flex-1">
                                         <Link
@@ -385,14 +317,16 @@ export function LibraryClient() {
                                             <SelectValue placeholder="Status" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {STATUS_OPTIONS.map((opt) => (
-                                                <SelectItem
-                                                    key={opt.value}
-                                                    value={opt.value}
-                                                >
-                                                    {opt.label}
-                                                </SelectItem>
-                                            ))}
+                                            {STATUS_SHORT_OPTIONS.map(
+                                                (opt) => (
+                                                    <SelectItem
+                                                        key={opt.value}
+                                                        value={opt.value}
+                                                    >
+                                                        {opt.label}
+                                                    </SelectItem>
+                                                ),
+                                            )}
                                         </SelectContent>
                                     </Select>
                                     <AddToList
@@ -419,29 +353,11 @@ export function LibraryClient() {
                         ))}
                     </div>
 
-                    {data.totalPages > 1 && (
-                        <div className="flex items-center justify-between">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page <= 1}
-                                onClick={() => setPage((p) => p - 1)}
-                            >
-                                Previous
-                            </Button>
-                            <span className="text-sm text-muted-foreground">
-                                Page {data.page} of {data.totalPages}
-                            </span>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page >= data.totalPages}
-                                onClick={() => setPage((p) => p + 1)}
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    )}
+                    <Pager
+                        page={page}
+                        totalPages={data.totalPages}
+                        onPageChange={setPage}
+                    />
                 </>
             )}
 
@@ -460,16 +376,19 @@ export function LibraryClient() {
                     </DialogHeader>
                     <DialogFooter>
                         <DialogClose asChild>
-                            <Button variant="outline" disabled={removing}>
+                            <Button
+                                variant="outline"
+                                disabled={removeUserGame.isPending}
+                            >
                                 Cancel
                             </Button>
                         </DialogClose>
                         <Button
                             variant="destructive"
                             onClick={handleRemoveGame}
-                            disabled={removing}
+                            disabled={removeUserGame.isPending}
                         >
-                            {removing ? "Removing..." : "Remove"}
+                            {removeUserGame.isPending ? "Removing..." : "Remove"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -18,7 +18,8 @@ export default async function GamesPage({
                 </p>
             </div>
             <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <GamesSearchClient query={q ?? ""} />
+                {/* Remount on query change so the search box reflects the new term. */}
+                <GamesSearchClient key={q ?? ""} query={q ?? ""} />
             </Suspense>
         </div>
     );

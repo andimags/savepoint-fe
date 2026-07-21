@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Link2 } from "lucide-react";
-import { connectPsn, getPsnStatus, resyncPsn } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
 import { PLATFORM_BRANDS } from "@/components/platform-logos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,15 +17,21 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Tile, SyncBadge } from "./connection-tile";
-import { SYNCING_STATES, useSyncStatus } from "./use-sync-status";
+import {
+    SYNCING_STATES,
+    useConnectPsn,
+    usePsnStatus,
+    useResyncPsn,
+} from "@/hooks/use-connections";
 
 const PLAYSTATION = PLATFORM_BRANDS.find((b) => b.key === "playstation")!;
 const SSO_COOKIE_URL = "https://ca.account.sony.com/api/v1/ssocookie";
 
 export function PsnCard() {
-    const { token, status, refresh } = useSyncStatus(getPsnStatus);
+    const { data: status } = usePsnStatus();
+    const connectPsn = useConnectPsn();
+    const resyncPsn = useResyncPsn();
     const [npsso, setNpsso] = useState("");
-    const [connecting, setConnecting] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
 
     function openDialog() {
@@ -33,44 +39,34 @@ export function PsnCard() {
         setDialogOpen(true);
     }
 
-    async function handleConnect(event: React.FormEvent<HTMLFormElement>) {
+    function handleConnect(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token) return;
         const wasConnected = status?.connected;
-        setConnecting(true);
-        try {
-            await connectPsn(token, npsso);
-            toast.success(
-                wasConnected
-                    ? "PlayStation reconnected — re-syncing your library."
-                    : "PlayStation connected — syncing your library.",
-            );
-            setDialogOpen(false);
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Could not connect PlayStation account.",
-            );
-        } finally {
-            setConnecting(false);
-        }
+        connectPsn.mutate(npsso, {
+            onSuccess: () => {
+                toast.success(
+                    wasConnected
+                        ? "PlayStation reconnected, re-syncing your library."
+                        : "PlayStation connected, syncing your library.",
+                );
+                setDialogOpen(false);
+            },
+            onError: (error) =>
+                toast.error(
+                    getErrorMessage(
+                        error,
+                        "Could not connect PlayStation account.",
+                    ),
+                ),
+        });
     }
 
-    async function handleResync() {
-        if (!token) return;
-        try {
-            await resyncPsn(token);
-            toast.success("Resync started.");
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Could not start resync.",
-            );
-        }
+    function handleResync() {
+        resyncPsn.mutate(undefined, {
+            onSuccess: () => toast.success("Resync started."),
+            onError: (error) =>
+                toast.error(getErrorMessage(error, "Could not start resync.")),
+        });
     }
 
     const connected = status?.connected;
@@ -160,10 +156,10 @@ export function PsnCard() {
                         </div>
                         <Button
                             type="submit"
-                            disabled={connecting}
+                            disabled={connectPsn.isPending}
                             className="w-full"
                         >
-                            {connecting
+                            {connectPsn.isPending
                                 ? "Saving..."
                                 : connected
                                   ? "Save & re-sync"
