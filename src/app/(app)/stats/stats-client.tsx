@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Bar, BarChart, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { getStatsOverview, type StatsOverview } from "@/lib/api-client";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -29,6 +30,7 @@ export function StatsClient() {
     const { data: session } = useSession();
     const token = session?.accessToken;
     const [stats, setStats] = useState<StatsOverview | null>(null);
+    const isMobile = useMediaQuery("(max-width: 639px)");
 
     useEffect(() => {
         if (!token) return;
@@ -127,7 +129,7 @@ export function StatsClient() {
                                     <YAxis
                                         type="category"
                                         dataKey="genre"
-                                        width={130}
+                                        width={isMobile ? 80 : 130}
                                         interval={0}
                                         tickLine={false}
                                         axisLine={false}
