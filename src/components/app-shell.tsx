@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -16,6 +17,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -42,6 +50,7 @@ export function AppShell({
     const pathname = usePathname();
     const router = useRouter();
     const [query, setQuery] = useState("");
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
     function handleSearch(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -52,7 +61,43 @@ export function AppShell({
     return (
         <div className="min-h-screen bg-app-glow">
             <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
-                <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
+                <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 md:gap-6">
+                    <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                        <SheetTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 md:hidden"
+                            >
+                                <Menu />
+                                <span className="sr-only">Open menu</span>
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left">
+                            <SheetHeader>
+                                <SheetTitle>Menu</SheetTitle>
+                            </SheetHeader>
+                            <nav className="flex flex-col gap-1">
+                                {NAV_LINKS.map((link) => (
+                                    <Link
+                                        key={link.href}
+                                        href={link.href}
+                                        onClick={() =>
+                                            setMobileNavOpen(false)
+                                        }
+                                        className={cn(
+                                            "rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground",
+                                            pathname.startsWith(link.href) &&
+                                                "bg-accent text-foreground",
+                                        )}
+                                    >
+                                        {link.label}
+                                    </Link>
+                                ))}
+                            </nav>
+                        </SheetContent>
+                    </Sheet>
+
                     <Link href="/home" className="shrink-0">
                         <Logo />
                     </Link>
@@ -75,7 +120,7 @@ export function AppShell({
 
                     <form
                         onSubmit={handleSearch}
-                        className="ml-auto w-full max-w-xs"
+                        className="ml-auto w-full min-w-0 max-w-xs"
                     >
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
