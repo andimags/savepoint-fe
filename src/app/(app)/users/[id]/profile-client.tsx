@@ -125,46 +125,50 @@ export function ProfileClient({ userId }: { userId: string }) {
 
     return (
         <div className="space-y-8">
-            <div className="flex items-center gap-4">
-                <Avatar className="size-28">
-                    {profile.avatarUrl && (
-                        <AvatarImage src={profile.avatarUrl} alt="" />
-                    )}
-                    <AvatarFallback className="bg-primary/15 text-3xl text-primary">
-                        {title.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        {title}
-                    </h1>
-                    {profile.displayName && (
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 items-center gap-4">
+                    <Avatar className="size-28 shrink-0">
+                        {profile.avatarUrl && (
+                            <AvatarImage src={profile.avatarUrl} alt="" />
+                        )}
+                        <AvatarFallback className="bg-primary/15 text-3xl text-primary">
+                            {title.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                        <h1 className="truncate text-2xl font-semibold tracking-tight">
+                            {title}
+                        </h1>
+                        {profile.displayName && (
+                            <p className="text-sm text-muted-foreground">
+                                @{profile.username}
+                            </p>
+                        )}
                         <p className="text-sm text-muted-foreground">
-                            @{profile.username}
+                            {profile.gameCount} games ·{" "}
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("followers")}
+                                className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-1 focus-visible:outline-ring"
+                            >
+                                {profile.followerCount} followers
+                            </button>{" "}
+                            ·{" "}
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("following")}
+                                className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-1 focus-visible:outline-ring"
+                            >
+                                {profile.followingCount} following
+                            </button>
                         </p>
-                    )}
-                    <p className="text-sm text-muted-foreground">
-                        {profile.gameCount} games ·{" "}
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab("followers")}
-                            className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-1 focus-visible:outline-ring"
-                        >
-                            {profile.followerCount} followers
-                        </button>{" "}
-                        ·{" "}
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab("following")}
-                            className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-1 focus-visible:outline-ring"
-                        >
-                            {profile.followingCount} following
-                        </button>
-                    </p>
-                    <ProfileConnections connections={profile.connections} />
+                        <ProfileConnections
+                            connections={profile.connections}
+                        />
+                    </div>
                 </div>
                 {profile.isSelf ? (
-                    <Button asChild variant="outline">
+                    <Button asChild variant="outline" className="sm:ml-auto">
                         <Link href="/settings/profile">
                             <Pencil data-icon="inline-start" /> Edit profile
                         </Link>
@@ -174,6 +178,7 @@ export function ProfileClient({ userId }: { userId: string }) {
                         variant={profile.isFollowing ? "outline" : "default"}
                         onClick={toggleFollow}
                         disabled={busy}
+                        className="sm:ml-auto"
                     >
                         {profile.isFollowing ? "Unfollow" : "Follow"}
                     </Button>
@@ -272,7 +277,7 @@ export function ProfileClient({ userId }: { userId: string }) {
                                                 <Star className="size-3.5" />{" "}
                                                 Favorite games
                                             </p>
-                                            <div className="grid grid-cols-5 gap-2">
+                                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                                                 {stats.favoriteGames.map(
                                                     (g) => (
                                                         <Link
