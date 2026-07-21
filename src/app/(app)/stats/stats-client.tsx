@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import { Bar, BarChart, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
-import { getStatsOverview, type StatsOverview } from "@/lib/api-client";
+import { useStatsOverview } from "@/hooks/use-stats";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -26,16 +24,7 @@ function formatHours(minutes: number): string {
 }
 
 export function StatsClient() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-    const [stats, setStats] = useState<StatsOverview | null>(null);
-
-    useEffect(() => {
-        if (!token) return;
-        getStatsOverview(token)
-            .then(setStats)
-            .catch(() => {});
-    }, [token]);
+    const { data: stats } = useStatsOverview();
 
     if (!stats) {
         return (

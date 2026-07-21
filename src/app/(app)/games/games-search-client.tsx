@@ -2,42 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import { Gamepad2, Search } from "lucide-react";
-import {
-    getBrowseGames,
-    searchGames,
-    thumbnailUrl,
-    type Game,
-} from "@/lib/api-client";
+import { useState } from "react";
+import { Search } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
+import { useBrowseGames, useGameSearch } from "@/hooks/use-games";
 import { AddToLibrary } from "@/components/add-to-library";
+import { GameCover } from "@/components/game-cover";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function GamesSearchClient({ query }: { query: string }) {
     const router = useRouter();
-    const { data: session } = useSession();
-    const token = session?.accessToken;
     const [input, setInput] = useState(query);
-    const [games, setGames] = useState<Game[] | null>(null);
-    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        setInput(query);
-    }, [query]);
-
-    useEffect(() => {
-        if (!token) return;
-        setGames(null);
-        setError(null);
-        // With a query → search; without → show a popular browse set so the page is never empty.
-        const load = query ? searchGames(token, query) : getBrowseGames(token);
-        load.then(setGames).catch((e: unknown) =>
-            setError(e instanceof Error ? e.message : "Failed to load games"),
-        );
-    }, [token, query]);
+    // With a query → search; without → show a popular browse set so the page is never empty.
+    const search = useGameSearch(query);
+    const browse = useBrowseGames(!query);
+    const active = query ? search : browse;
+    const games = active.data;
+    const error = active.error;
 
     function submit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -65,7 +49,9 @@ export function GamesSearchClient({ query }: { query: string }) {
             </h2>
 
             {error ? (
-                <p className="text-sm text-destructive">{error}</p>
+                <p className="text-sm text-destructive">
+                    {getErrorMessage(error, "Failed to load games")}
+                </p>
             ) : !games ? (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                     {Array.from({ length: 8 }).map((_, i) => (
@@ -87,22 +73,12 @@ export function GamesSearchClient({ query }: { query: string }) {
                                 href={`/games/${game.id}`}
                                 className="group relative block aspect-[16/9] bg-muted"
                             >
-                                {game.coverUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={
-                                            thumbnailUrl(game.coverUrl) ??
-                                            game.coverUrl
-                                        }
-                                        alt=""
-                                        loading="lazy"
-                                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                    />
-                                ) : (
-                                    <div className="flex size-full items-center justify-center text-muted-foreground">
-                                        <Gamepad2 className="size-8" />
-                                    </div>
-                                )}
+                                <GameCover
+                                    url={game.coverUrl}
+                                    loading="lazy"
+                                    className="size-full transition-transform duration-300 group-hover:scale-105"
+                                    iconClassName="size-8"
+                                />
                             </Link>
                             <div className="flex flex-1 flex-col gap-2 p-3">
                                 <Link

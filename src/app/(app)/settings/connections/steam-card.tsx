@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Pencil, RefreshCw } from "lucide-react";
-import { connectSteam, getSteamStatus, resyncSteam } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
 import { PLATFORM_BRANDS } from "@/components/platform-logos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +17,20 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Tile, SyncBadge } from "./connection-tile";
-import { SYNCING_STATES, useSyncStatus } from "./use-sync-status";
+import {
+    SYNCING_STATES,
+    useConnectSteam,
+    useResyncSteam,
+    useSteamStatus,
+} from "@/hooks/use-connections";
 
 const STEAM = PLATFORM_BRANDS.find((b) => b.key === "steam")!;
 
 export function SteamCard() {
-    const { token, status, refresh } = useSyncStatus(getSteamStatus);
+    const { data: status } = useSteamStatus();
+    const connectSteam = useConnectSteam();
+    const resyncSteam = useResyncSteam();
     const [profileInput, setProfileInput] = useState("");
-    const [connecting, setConnecting] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
 
     function openProfileDialog(prefill: string) {
@@ -32,36 +38,29 @@ export function SteamCard() {
         setDialogOpen(true);
     }
 
-    async function handleConnect(event: React.FormEvent<HTMLFormElement>) {
+    function handleConnect(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token) return;
         const wasConnected = status?.connected;
-        setConnecting(true);
-        try {
-            await connectSteam(token, profileInput);
-            toast.success(
-                wasConnected
-                    ? "Steam profile updated, re-syncing your library."
-                    : "Steam connected, syncing your library.",
-            );
-            setDialogOpen(false);
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Could not connect Steam account.",
-            );
-        } finally {
-            setConnecting(false);
-        }
+        connectSteam.mutate(profileInput, {
+            onSuccess: () => {
+                toast.success(
+                    wasConnected
+                        ? "Steam profile updated, re-syncing your library."
+                        : "Steam connected, syncing your library.",
+                );
+                setDialogOpen(false);
+            },
+            onError: (error) =>
+                toast.error(
+                    getErrorMessage(error, "Could not connect Steam account."),
+                ),
+        });
     }
 
-    async function handleResync() {
-        if (!token) return;
-        await resyncSteam(token);
-        toast.success("Resync started.");
-        await refresh();
+    function handleResync() {
+        resyncSteam.mutate(undefined, {
+            onSuccess: () => toast.success("Resync started."),
+        });
     }
 
     const connected = status?.connected;
@@ -144,10 +143,10 @@ export function SteamCard() {
                         </div>
                         <Button
                             type="submit"
-                            disabled={connecting}
+                            disabled={connectSteam.isPending}
                             className="w-full"
                         >
-                            {connecting
+                            {connectSteam.isPending
                                 ? "Saving..."
                                 : connected
                                   ? "Save & re-sync"

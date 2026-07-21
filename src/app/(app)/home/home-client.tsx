@@ -1,26 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useSession } from "next-auth/react";
-import { Gamepad2 } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
 import { BookMarked, Library, ListPlus } from "lucide-react";
+import { STATUS_LABELS, type ActivityItem } from "@/lib/api-client";
 import {
-    getActivityFeed,
-    getPlayingFeed,
-    getRecommendations,
-    thumbnailUrl,
-    STATUS_LABELS,
-    type ActivityItem,
-    type PlayingFeedItem,
-    type Recommendation,
-} from "@/lib/api-client";
+    useActivityFeed,
+    usePlayingFeed,
+} from "@/hooks/use-social";
+import { useRecommendations } from "@/hooks/use-stats";
 import { GameCard } from "@/components/game-card";
+import { GameCover } from "@/components/game-cover";
 import { ReviewCard } from "@/components/review-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-const PAGE_SIZE = 10;
 
 const ACTIVITY_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
     month: "short",
@@ -148,21 +141,11 @@ function LibraryActivityCard({
                     {library.author.username.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
             </Avatar>
-            {library.game.coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    src={
-                        thumbnailUrl(library.game.coverUrl) ??
-                        library.game.coverUrl
-                    }
-                    alt=""
-                    className="h-9 w-14 shrink-0 rounded object-cover"
-                />
-            ) : (
-                <div className="flex h-9 w-14 shrink-0 items-center justify-center rounded bg-muted">
-                    <Gamepad2 className="size-4 text-muted-foreground" />
-                </div>
-            )}
+            <GameCover
+                url={library.game.coverUrl}
+                className="h-9 w-14 shrink-0 rounded"
+                iconClassName="size-4"
+            />
             <div className="min-w-0 flex-1 text-sm">
                 <Link
                     href={`/users/${library.author.id}`}
@@ -191,70 +174,51 @@ function LibraryActivityCard({
 }
 
 export function HomeClient() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-
-    const [friendsFeed, setFriendsFeed] = useState<PlayingFeedItem[] | null>(
-        null,
-    );
-    const [recs, setRecs] = useState<Recommendation[] | null>(null);
-
-    const [activity, setActivity] = useState<ActivityItem[]>([]);
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
-    const [loading, setLoading] = useState(false);
-    const [initialized, setInitialized] = useState(false);
+    const { data: friendsFeed } = usePlayingFeed();
+    const { data: recs } = useRecommendations();
+    const {
+        data: activityData,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        isPending: activityPending,
+    } = useActivityFeed();
 
     const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-    useEffect(() => {
-        if (!token) return;
-        getPlayingFeed(token)
-            .then(setFriendsFeed)
-            .catch(() => setFriendsFeed([]));
-        getRecommendations(token)
-            .then(setRecs)
-            .catch(() => setRecs([]));
-    }, [token]);
-
-    const loadMore = useCallback(async () => {
-        if (!token || loading || !hasMore) return;
-        setLoading(true);
-        try {
-            const data = await getActivityFeed(token, page, PAGE_SIZE);
-            setActivity((prev) => {
-                const seen = new Set(prev.map(activityKey));
-                const next = data.items.filter(
-                    (i) => !seen.has(activityKey(i)),
-                );
-                return [...prev, ...next];
-            });
-            setHasMore(data.hasMore);
-            setPage((p) => p + 1);
-        } finally {
-            setLoading(false);
-            setInitialized(true);
+    // Flatten paginated activity, dropping any items that repeat across page boundaries.
+    const activity = useMemo(() => {
+        const seen = new Set<string>();
+        const items: ActivityItem[] = [];
+        for (const page of activityData?.pages ?? []) {
+            for (const item of page.items) {
+                const key = activityKey(item);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                items.push(item);
+            }
         }
-    }, [token, page, loading, hasMore]);
+        return items;
+    }, [activityData]);
 
-    // Initial load
-    useEffect(() => {
-        if (token && !initialized) loadMore();
-    }, [token, initialized, loadMore]);
-
-    // Infinite scroll observer
     useEffect(() => {
         const el = sentinelRef.current;
         if (!el) return;
         const observer = new IntersectionObserver(
             (entries) => {
-                if (entries[0].isIntersecting) loadMore();
+                if (
+                    entries[0].isIntersecting &&
+                    hasNextPage &&
+                    !isFetchingNextPage
+                ) {
+                    fetchNextPage();
+                }
             },
             { rootMargin: "400px" },
         );
         observer.observe(el);
         return () => observer.disconnect();
-    }, [loadMore]);
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
     return (
         <div className="space-y-8">
@@ -271,21 +235,11 @@ export function HomeClient() {
                                 href={`/games/${item.game.id}`}
                                 className="flex w-44 shrink-0 items-center gap-2 rounded-lg border bg-card p-2"
                             >
-                                {item.game.coverUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={
-                                            thumbnailUrl(item.game.coverUrl) ??
-                                            item.game.coverUrl
-                                        }
-                                        alt=""
-                                        className="h-9 w-14 rounded object-cover"
-                                    />
-                                ) : (
-                                    <div className="flex h-9 w-14 items-center justify-center rounded bg-muted">
-                                        <Gamepad2 className="size-4 text-muted-foreground" />
-                                    </div>
-                                )}
+                                <GameCover
+                                    url={item.game.coverUrl}
+                                    className="h-9 w-14 rounded"
+                                    iconClassName="size-4"
+                                />
                                 <div className="min-w-0">
                                     <p className="truncate text-xs font-medium">
                                         {item.game.name}
@@ -326,7 +280,7 @@ export function HomeClient() {
                     Activity
                 </h2>
 
-                {!initialized ? (
+                {activityPending ? (
                     <div className="space-y-4">
                         {Array.from({ length: 3 }).map((_, i) => (
                             <Skeleton key={i} className="h-24 w-full" />
@@ -376,12 +330,14 @@ export function HomeClient() {
                 )}
 
                 {/* Sentinel + loading state */}
-                {hasMore && initialized && (
+                {hasNextPage && !activityPending && (
                     <div ref={sentinelRef} className="py-4">
-                        {loading && <Skeleton className="h-24 w-full" />}
+                        {isFetchingNextPage && (
+                            <Skeleton className="h-24 w-full" />
+                        )}
                     </div>
                 )}
-                {!hasMore && activity.length > 0 && (
+                {!hasNextPage && activity.length > 0 && (
                     <p className="py-4 text-center text-xs text-muted-foreground">
                         You&apos;re all caught up.
                     </p>

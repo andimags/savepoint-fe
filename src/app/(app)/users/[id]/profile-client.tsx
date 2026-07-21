@@ -1,34 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Gamepad2, ListMusic } from "lucide-react";
+import { ListMusic } from "lucide-react";
 import { Heart, Pencil, Star } from "lucide-react";
+import { STATUS_LABELS, type GameStatus } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
+import { STATUS_FILTERS } from "@/lib/options";
+import { formatPlaytime } from "@/lib/utils";
+import { useLibrary } from "@/hooks/use-library";
+import { useUserLists } from "@/hooks/use-lists";
 import {
-    followUser,
-    getFollowers,
-    getFollowing,
-    getProfile,
-    getProfileStats,
-    getUserGames,
-    getUserLists,
-    getUserReviews,
-    unfollowUser,
-    thumbnailUrl,
-    STATUS_LABELS,
-    type GameStatus,
-    type ListSummary,
-    type Paginated,
-    type Profile,
-    type ProfileStats,
-    type ReviewView,
-    type UserGame,
-} from "@/lib/api-client";
+    useFollowers,
+    useFollowing,
+    useProfile,
+    useProfileStats,
+    useToggleFollow,
+    useUserReviews,
+} from "@/hooks/use-social";
+import { GameCover } from "@/components/game-cover";
+import { Pager } from "@/components/pager";
 import { ReviewCard } from "@/components/review-card";
 import { ProfileConnections } from "./profile-connections";
-import { formatPlaytime } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,84 +35,33 @@ interface SimpleUser {
     username: string;
 }
 
-const STATUS_FILTERS: { value: string; label: string }[] = [
-    { value: "ALL", label: "All" },
-    { value: "PLAYING", label: "Playing" },
-    { value: "FINISHED", label: "Finished" },
-    { value: "BACKLOG", label: "Backlog" },
-    { value: "DROPPED", label: "Dropped" },
-];
-
 export function ProfileClient({ userId }: { userId: string }) {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const [stats, setStats] = useState<ProfileStats | null>(null);
-    const [reviews, setReviews] = useState<Paginated<ReviewView> | null>(null);
-    const [games, setGames] = useState<Paginated<UserGame> | null>(null);
-    const [lists, setLists] = useState<ListSummary[] | null>(null);
-    const [followers, setFollowers] = useState<SimpleUser[] | null>(null);
-    const [following, setFollowing] = useState<SimpleUser[] | null>(null);
-    const [busy, setBusy] = useState(false);
     const [activeTab, setActiveTab] = useState("games");
     const [gameStatus, setGameStatus] = useState("ALL");
+    const [gamePage, setGamePage] = useState(1);
 
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        const [p, st, r, ls, fr, fl] = await Promise.all([
-            getProfile(token, userId),
-            getProfileStats(token, userId),
-            getUserReviews(token, userId),
-            getUserLists(token, userId),
-            getFollowers(token, userId),
-            getFollowing(token, userId),
-        ]);
-        setProfile(p);
-        setStats(st);
-        setReviews(r);
-        setLists(ls);
-        setFollowers(fr);
-        setFollowing(fl);
-    }, [token, userId]);
-
-    const loadGames = useCallback(async () => {
-        if (!token) return;
-        const status =
-            gameStatus === "ALL" ? undefined : (gameStatus as GameStatus);
-        setGames(await getUserGames(token, 1, 24, status, undefined, userId));
-    }, [token, userId, gameStatus]);
-
-    useEffect(() => {
-        refresh().catch(() => toast.error("Failed to load profile."));
-    }, [refresh]);
-
-    useEffect(() => {
-        setGames(null);
-        loadGames().catch(() => toast.error("Failed to load games."));
-    }, [loadGames]);
+    const { data: profile } = useProfile(userId);
+    const { data: stats } = useProfileStats(userId);
+    const { data: reviews } = useUserReviews(userId);
+    const { data: lists } = useUserLists(userId);
+    const { data: followers } = useFollowers(userId);
+    const { data: following } = useFollowing(userId);
+    const { data: games } = useLibrary({
+        userId,
+        page: gamePage,
+        limit: 24,
+        status: gameStatus === "ALL" ? undefined : (gameStatus as GameStatus),
+    });
+    const toggleFollow = useToggleFollow(userId);
 
     if (!profile) return <Skeleton className="h-64 w-full" />;
 
-    async function toggleFollow() {
-        if (!token || !profile) return;
-        setBusy(true);
-        try {
-            if (profile.isFollowing) {
-                await unfollowUser(token, userId);
-            } else {
-                await followUser(token, userId);
-            }
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update follow.",
-            );
-        } finally {
-            setBusy(false);
-        }
+    function handleToggleFollow() {
+        if (!profile) return;
+        toggleFollow.mutate(profile.isFollowing, {
+            onError: (error) =>
+                toast.error(getErrorMessage(error, "Failed to update follow.")),
+        });
     }
 
     const title = profile.displayName || profile.username;
@@ -179,8 +122,8 @@ export function ProfileClient({ userId }: { userId: string }) {
                 ) : (
                     <Button
                         variant={profile.isFollowing ? "outline" : "default"}
-                        onClick={toggleFollow}
-                        disabled={busy}
+                        onClick={handleToggleFollow}
+                        disabled={toggleFollow.isPending}
                     >
                         {profile.isFollowing ? "Unfollow" : "Follow"}
                     </Button>
@@ -205,18 +148,10 @@ export function ProfileClient({ userId }: { userId: string }) {
                                 >
                                     <div className="relative aspect-[16/9] bg-muted">
                                         {stats.favoriteGame.coverUrl && (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img
-                                                src={
-                                                    thumbnailUrl(
-                                                        stats.favoriteGame
-                                                            .coverUrl,
-                                                    ) ??
-                                                    stats.favoriteGame.coverUrl
-                                                }
-                                                alt=""
+                                            <GameCover
+                                                url={stats.favoriteGame.coverUrl}
                                                 loading="lazy"
-                                                className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                className="size-full transition-transform duration-300 group-hover:scale-105"
                                             />
                                         )}
                                         <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-xs font-medium text-brand-foreground">
@@ -289,19 +224,15 @@ export function ProfileClient({ userId }: { userId: string }) {
                                                         >
                                                             <div className="aspect-[16/9] overflow-hidden rounded-md bg-muted">
                                                                 {g.coverUrl && (
-                                                                    // eslint-disable-next-line @next/next/no-img-element
-                                                                    <img
-                                                                        src={
-                                                                            thumbnailUrl(
-                                                                                g.coverUrl,
-                                                                            ) ??
+                                                                    <GameCover
+                                                                        url={
                                                                             g.coverUrl
                                                                         }
                                                                         alt={
                                                                             g.name
                                                                         }
                                                                         loading="lazy"
-                                                                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                                        className="size-full transition-transform duration-300 group-hover:scale-105"
                                                                     />
                                                                 )}
                                                             </div>
@@ -344,7 +275,13 @@ export function ProfileClient({ userId }: { userId: string }) {
                 </TabsList>
 
                 <TabsContent value="games" className="space-y-4 pt-4">
-                    <Tabs value={gameStatus} onValueChange={setGameStatus}>
+                    <Tabs
+                        value={gameStatus}
+                        onValueChange={(value) => {
+                            setGameStatus(value);
+                            setGamePage(1);
+                        }}
+                    >
                         <TabsList>
                             {STATUS_FILTERS.map((filter) => (
                                 <TabsTrigger
@@ -380,23 +317,11 @@ export function ProfileClient({ userId }: { userId: string }) {
                                         href={`/games/${ug.gameId}`}
                                         className="shrink-0"
                                     >
-                                        {ug.game.coverUrl ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img
-                                                src={
-                                                    thumbnailUrl(
-                                                        ug.game.coverUrl,
-                                                    ) ?? ug.game.coverUrl
-                                                }
-                                                alt=""
-                                                loading="lazy"
-                                                className="h-14 w-24 rounded-md object-cover"
-                                            />
-                                        ) : (
-                                            <div className="flex h-14 w-24 items-center justify-center rounded-md bg-muted">
-                                                <Gamepad2 className="size-5 text-muted-foreground" />
-                                            </div>
-                                        )}
+                                        <GameCover
+                                            url={ug.game.coverUrl}
+                                            loading="lazy"
+                                            className="h-14 w-24 rounded-md"
+                                        />
                                     </Link>
                                     <div className="min-w-0 flex-1">
                                         <Link
@@ -420,6 +345,14 @@ export function ProfileClient({ userId }: { userId: string }) {
                                 </div>
                             ))}
                         </div>
+                    )}
+
+                    {games && (
+                        <Pager
+                            page={gamePage}
+                            totalPages={games.totalPages}
+                            onPageChange={setGamePage}
+                        />
                     )}
                 </TabsContent>
 
@@ -532,7 +465,7 @@ function UserList({
     users,
     emptyLabel,
 }: {
-    users: SimpleUser[] | null;
+    users: SimpleUser[] | undefined;
     emptyLabel: string;
 }) {
     if (!users) return <Skeleton className="h-16 w-full" />;

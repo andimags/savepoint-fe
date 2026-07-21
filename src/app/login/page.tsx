@@ -4,9 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { loginSchema, type LoginValues } from "@/lib/schemas/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from "@/components/ui/form";
 import {
     Card,
     CardContent,
@@ -20,21 +30,19 @@ import { Logo } from "@/components/logo";
 export default function LoginPage() {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
-    const [pending, setPending] = useState(false);
 
-    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        setPending(true);
+    const form = useForm<LoginValues>({
+        resolver: zodResolver(loginSchema),
+        defaultValues: { email: "", password: "" },
+    });
+
+    async function onSubmit(values: LoginValues) {
         setError(null);
-
-        const formData = new FormData(event.currentTarget);
         const result = await signIn("credentials", {
-            email: formData.get("email"),
-            password: formData.get("password"),
+            email: values.email,
+            password: values.password,
             redirect: false,
         });
-
-        setPending(false);
 
         if (result?.error) {
             setError("Invalid email or password.");
@@ -58,40 +66,64 @@ export default function LoginPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                                id="email"
-                                name="email"
-                                type="email"
-                                required
-                                autoComplete="email"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Password</Label>
-                            <Input
-                                id="password"
-                                name="password"
-                                type="password"
-                                required
-                                autoComplete="current-password"
-                            />
-                        </div>
-                        {error && (
-                            <Alert variant="destructive">
-                                <AlertDescription>{error}</AlertDescription>
-                            </Alert>
-                        )}
-                        <Button
-                            type="submit"
-                            disabled={pending}
-                            className="w-full"
+                    <Form {...form}>
+                        <form
+                            onSubmit={form.handleSubmit(onSubmit)}
+                            className="space-y-4"
+                            noValidate
                         >
-                            {pending ? "Logging in..." : "Log in"}
-                        </Button>
-                    </form>
+                            <FormField
+                                control={form.control}
+                                name="email"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Email</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="email"
+                                                autoComplete="email"
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="password"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Password</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="password"
+                                                autoComplete="current-password"
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            {error && (
+                                <Alert variant="destructive">
+                                    <AlertDescription>
+                                        {error}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                            <Button
+                                type="submit"
+                                disabled={form.formState.isSubmitting}
+                                className="w-full"
+                            >
+                                {form.formState.isSubmitting
+                                    ? "Logging in..."
+                                    : "Log in"}
+                            </Button>
+                        </form>
+                    </Form>
                     <p className="mt-4 text-center text-sm text-muted-foreground">
                         Don&apos;t have an account?{" "}
                         <Link

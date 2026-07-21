@@ -1,21 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Gamepad2, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import {
-    deleteDiaryEntry,
-    getDiary,
-    thumbnailUrl,
-    updateDiaryEntry,
     type DiaryEntry,
-    type Paginated,
     MANUAL_PLATFORMS,
     PLATFORM_LABELS,
     STATUS_LABELS,
 } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/errors";
+import {
+    useDeleteDiaryEntry,
+    useDiary,
+    useUpdateDiaryEntry,
+} from "@/hooks/use-diary";
+import { GameCover } from "@/components/game-cover";
+import { Pager } from "@/components/pager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,24 +48,15 @@ function monthLabel(dateStr: string): string {
 }
 
 export function DiaryClient() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
-
-    const [data, setData] = useState<Paginated<DiaryEntry> | null>(null);
     const [page, setPage] = useState(1);
+    const { data, isPending } = useDiary(page);
+    const updateEntry = useUpdateDiaryEntry();
+    const deleteEntry = useDeleteDiaryEntry();
+
     const [editing, setEditing] = useState<DiaryEntry | null>(null);
     const [editDate, setEditDate] = useState("");
     const [editPlatform, setEditPlatform] = useState("PC");
     const [editNote, setEditNote] = useState("");
-
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        setData(await getDiary(token, page));
-    }, [token, page]);
-
-    useEffect(() => {
-        refresh().catch(() => {});
-    }, [refresh]);
 
     const grouped = useMemo(() => {
         if (!data) return [];
@@ -84,37 +77,40 @@ export function DiaryClient() {
         setEditNote(entry.note ?? "");
     }
 
-    async function handleEdit(event: React.FormEvent<HTMLFormElement>) {
+    function handleEdit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token || !editing) return;
-        try {
-            await updateDiaryEntry(token, editing.id, {
-                playedOn: editDate,
-                platform: editPlatform,
-                note: editNote || undefined,
-            });
-            setEditing(null);
-            toast.success("Entry updated.");
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update entry.",
-            );
-        }
+        if (!editing) return;
+        updateEntry.mutate(
+            {
+                id: editing.id,
+                entry: {
+                    playedOn: editDate,
+                    platform: editPlatform,
+                    note: editNote || undefined,
+                },
+            },
+            {
+                onSuccess: () => {
+                    setEditing(null);
+                    toast.success("Entry updated.");
+                },
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to update entry."),
+                    ),
+            },
+        );
     }
 
-    async function handleDelete(entry: DiaryEntry) {
-        if (!token) return;
-        await deleteDiaryEntry(token, entry.id);
-        toast.success("Entry deleted.");
-        await refresh();
+    function handleDelete(entry: DiaryEntry) {
+        deleteEntry.mutate(entry.id, {
+            onSuccess: () => toast.success("Entry deleted."),
+        });
     }
 
-    if (!data) return <Skeleton className="h-64 w-full" />;
+    if (isPending) return <Skeleton className="h-64 w-full" />;
 
-    if (data.items.length === 0) {
+    if (!data || data.items.length === 0) {
         return (
             <p className="py-12 text-center text-sm text-muted-foreground">
                 Your diary is empty. Open a game page and hit “Log to diary” to
@@ -143,22 +139,11 @@ export function DiaryClient() {
                                     href={`/games/${entry.gameId}`}
                                     className="shrink-0"
                                 >
-                                    {entry.game.coverUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={
-                                                thumbnailUrl(
-                                                    entry.game.coverUrl,
-                                                ) ?? entry.game.coverUrl
-                                            }
-                                            alt=""
-                                            className="h-10 w-16 rounded object-cover"
-                                        />
-                                    ) : (
-                                        <div className="flex h-10 w-16 items-center justify-center rounded bg-muted">
-                                            <Gamepad2 className="size-4 text-muted-foreground" />
-                                        </div>
-                                    )}
+                                    <GameCover
+                                        url={entry.game.coverUrl}
+                                        className="h-10 w-16 rounded"
+                                        iconClassName="size-4"
+                                    />
                                 </Link>
                                 <div className="min-w-0 flex-1">
                                     <Link
@@ -208,29 +193,11 @@ export function DiaryClient() {
                 </section>
             ))}
 
-            {data.totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={page <= 1}
-                        onClick={() => setPage((p) => p - 1)}
-                    >
-                        Previous
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                        Page {data.page} of {data.totalPages}
-                    </span>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={page >= data.totalPages}
-                        onClick={() => setPage((p) => p + 1)}
-                    >
-                        Next
-                    </Button>
-                </div>
-            )}
+            <Pager
+                page={page}
+                totalPages={data.totalPages}
+                onPageChange={setPage}
+            />
 
             <Dialog
                 open={editing !== null}
@@ -277,8 +244,14 @@ export function DiaryClient() {
                                 onChange={(e) => setEditNote(e.target.value)}
                             />
                         </div>
-                        <Button type="submit" className="w-full">
-                            Save changes
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={updateEntry.isPending}
+                        >
+                            {updateEntry.isPending
+                                ? "Saving..."
+                                : "Save changes"}
                         </Button>
                     </form>
                 </DialogContent>

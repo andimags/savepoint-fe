@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { ListPlus } from "lucide-react";
-import { createList, getMyLists, type ListSummary } from "@/lib/api-client";
+import { useCreateList, useMyLists } from "@/hooks/use-lists";
+import { getErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,44 +26,31 @@ import {
 } from "@/components/ui/dialog";
 
 export function ListsClient() {
-    const { data: session } = useSession();
-    const token = session?.accessToken;
+    const { data: lists } = useMyLists();
+    const createList = useCreateList();
 
-    const [lists, setLists] = useState<ListSummary[] | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
 
-    const refresh = useCallback(async () => {
-        if (!token) return;
-        setLists(await getMyLists(token));
-    }, [token]);
-
-    useEffect(() => {
-        refresh().catch(() => {});
-    }, [refresh]);
-
-    async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
+    function handleCreate(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!token || !title.trim()) return;
-        try {
-            await createList(
-                token,
-                title.trim(),
-                description.trim() || undefined,
-            );
-            setCreateOpen(false);
-            setTitle("");
-            setDescription("");
-            toast.success("List created.");
-            await refresh();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to create list.",
-            );
-        }
+        if (!title.trim()) return;
+        createList.mutate(
+            { title: title.trim(), description: description.trim() || undefined },
+            {
+                onSuccess: () => {
+                    setCreateOpen(false);
+                    setTitle("");
+                    setDescription("");
+                    toast.success("List created.");
+                },
+                onError: (error) =>
+                    toast.error(
+                        getErrorMessage(error, "Failed to create list."),
+                    ),
+            },
+        );
     }
 
     return (
