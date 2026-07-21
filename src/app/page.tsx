@@ -113,7 +113,7 @@ export default async function Home() {
                         ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Steam and PlayStation available now — more platforms
+                        Steam and PlayStation available now, more platforms
                         coming soon.
                     </p>
                 </div>
