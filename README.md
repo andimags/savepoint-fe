@@ -51,17 +51,17 @@ frontend/
 
 ## Architecture
 
-- **App Router** — routes live under `src/app`. Authenticated screens are grouped in the `(app)` route group.
-- **Pages** — each route's `page.tsx` is a Server Component that loads the session and fetches initial data.
-- **Client components** — interactive UI lives in `*-client.tsx` files marked `"use client"`.
-- **Layouts** — `app/layout.tsx` (root) and `app/(app)/layout.tsx` (authenticated shell).
-- **Services / API layer** — all backend calls go through `src/lib/api-client.ts`.
-- **DTOs / types** — request/response shapes are defined as TypeScript interfaces in `api-client.ts` and `src/types`.
-- **Hooks** — TODO: no shared `hooks/` directory currently exists.
-- **State management** — React state, server state (Server Components), and the NextAuth session. No global state library is used.
-- **UI library** — shadcn/ui built on Radix UI primitives.
-- **Forms** — native forms submitted via server actions with server-side validation.
-- **Validation** — handled server-side (in server actions and by the backend); no client-side schema library is used.
+- **App Router**: routes live under `src/app`. Authenticated screens are grouped in the `(app)` route group.
+- **Pages**: each route's `page.tsx` is a Server Component that loads the session and fetches initial data.
+- **Client components**: interactive UI lives in `*-client.tsx` files marked `"use client"`.
+- **Layouts**: `app/layout.tsx` (root) and `app/(app)/layout.tsx` (authenticated shell).
+- **Services / API layer**: all backend calls go through `src/lib/api-client.ts`.
+- **DTOs / types**: request/response shapes are defined as TypeScript interfaces in `api-client.ts` and `src/types`.
+- **Hooks**: TODO: no shared `hooks/` directory currently exists.
+- **State management**: React state, server state (Server Components), and the NextAuth session. No global state library is used.
+- **UI library**: shadcn/ui built on Radix UI primitives.
+- **Forms**: native forms submitted via server actions with server-side validation.
+- **Validation**: handled server-side (in server actions and by the backend); no client-side schema library is used.
 
 ---
 
@@ -101,9 +101,9 @@ frontend/
 
 ## Styling
 
-- **Tailwind CSS v4** — configured via `@tailwindcss/postcss`; global styles in `src/app/globals.css`.
-- **shadcn/ui** — components generated per `components.json` (`radix-nova` style, `neutral` base color, CSS variables).
-- **Theming** — light/dark handled by `next-themes`.
+- **Tailwind CSS v4**: configured via `@tailwindcss/postcss`; global styles in `src/app/globals.css`.
+- **shadcn/ui**: components generated per `components.json` (`radix-nova` style, `neutral` base color, CSS variables).
+- **Theming**: light/dark handled by `next-themes`.
 
 ---
 
@@ -167,12 +167,12 @@ npm run start
 
 ## Coding Guidelines
 
-- **Components** — `PascalCase` names; interactive components in `*-client.tsx` marked `"use client"`.
-- **Server Components** — default; use Client Components only when browser APIs, state, or events are required.
-- **Services** — all backend access through `src/lib/api-client.ts`; do not call the backend directly from components.
-- **DTOs / types** — define request/response types alongside the API client or in `src/types`.
-- **File organization** — feature routes under `app/(app)`; shared UI in `components`.
-- **Import ordering** — Node → external packages → internal aliases (`@/…`) → relative → types.
+- **Components**: `PascalCase` names; interactive components in `*-client.tsx` marked `"use client"`.
+- **Server Components**: default; use Client Components only when browser APIs, state, or events are required.
+- **Services**: all backend access through `src/lib/api-client.ts`; do not call the backend directly from components.
+- **DTOs / types**: define request/response types alongside the API client or in `src/types`.
+- **File organization**: feature routes under `app/(app)`; shared UI in `components`.
+- **Import ordering**: Node → external packages → internal aliases (`@/…`) → relative → types.
 
 ---
 
@@ -196,8 +196,8 @@ deployed backend.
 
 ## Troubleshooting
 
-- **Requests fail / 401** — confirm `API_URL` and `NEXT_PUBLIC_API_URL` point to a running backend and that you are signed in.
-- **Login always fails** — ensure the backend is reachable and `AUTH_SECRET` is set.
-- **CORS errors** — the backend must allow the frontend origin (`FRONTEND_URL` on the backend).
-- **Images not loading** — game covers are served from external CDNs (RAWG/Steam); check network access.
-- **Env changes not applied** — restart the dev server after editing `.env.local`.
+- **Requests fail / 401**: confirm `API_URL` and `NEXT_PUBLIC_API_URL` point to a running backend and that you are signed in.
+- **Login always fails**: ensure the backend is reachable and `AUTH_SECRET` is set.
+- **CORS errors**: the backend must allow the frontend origin (`FRONTEND_URL` on the backend).
+- **Images not loading**: game covers are served from external CDNs (RAWG/Steam); check network access.
+- **Env changes not applied**: restart the dev server after editing `.env.local`.
