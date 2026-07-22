@@ -116,7 +116,7 @@ frontend/
 | `API_URL` | Backend base URL used in server-side code. |
 | `NEXT_PUBLIC_API_URL` | Backend base URL exposed to the browser. |
 
-See `.env.local.example` for a template.
+See `.env.example` for a template.
 
 ---
 
@@ -133,7 +133,7 @@ npm install
 Create `.env.local` from the example, then start the dev server:
 
 ```bash
-cp .env.local.example .env.local
+cp .env.example .env.local
 npm run dev
 ```
 
